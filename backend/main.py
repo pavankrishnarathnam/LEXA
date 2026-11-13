@@ -69,7 +69,8 @@ async def security_middleware(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Cache-Control"] = response.headers.get("Cache-Control", "no-store")
+    if "cache-control" not in response.headers:
+        response.headers["Cache-Control"] = "no-store"
     if request.url.path not in ("/api/health", "/api/events"):
         log.info("%s %s %s %dms rid=%s", request.method, request.url.path, response.status_code,
                  int((time.monotonic() - started) * 1000), rid)

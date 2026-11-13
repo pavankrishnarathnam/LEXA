@@ -41,7 +41,7 @@ class Settings(BaseSettings):
 
     # Limits
     monthly_budget_usd: float = 50.0
-    rate_limit_per_minute: int = 60
+    rate_limit_per_minute: int = 300  # per-user API requests per minute
     auth_rate_limit: int = 20  # login attempts per IP per 5 minutes (registration: half)
     max_upload_mb: int = 20
     task_timeout_seconds: int = 900

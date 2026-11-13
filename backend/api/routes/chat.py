@@ -132,7 +132,9 @@ async def events(request: Request, user: CurrentUser) -> EventSourceResponse:
                 break
             yield {"event": evt["event"], "data": json.dumps(evt["data"], default=str)}
 
-    return EventSourceResponse(gen(), ping=20)
+    # no-transform stops intermediaries (Next.js/Nginx gzip) from buffering the stream.
+    return EventSourceResponse(gen(), ping=20, headers={"Cache-Control": "no-cache, no-transform",
+                                                         "X-Accel-Buffering": "no"})
 
 
 # ------------------------------------------------------------------ voice
