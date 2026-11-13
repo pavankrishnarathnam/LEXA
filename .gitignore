@@ -1,0 +1,28 @@
+# Secrets & env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+# Runtime data
+/data/
+backups/
+*.log
+.DS_Store
+test-results/
+playwright-report/
