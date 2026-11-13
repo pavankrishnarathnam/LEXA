@@ -27,8 +27,6 @@ def _validate_tools(tools: list[str]) -> list[str]:
 async def tool_catalog(user: CurrentUser) -> list[dict]:
     items = [{"name": t.name, "description": t.description, "risk": t.risk.value, "category": t.category,
               "integration": t.integration} for t in TOOLS.values()]
-    items.append({"name": WEB_SEARCH, "description": "Claude hosted web search with citations", "risk": "read",
-                  "category": "research", "integration": None})
     return sorted(items, key=lambda x: (x["category"], x["name"]))
 
 

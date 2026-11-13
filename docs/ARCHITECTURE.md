@@ -7,7 +7,7 @@ Browser (Next.js UI) ──HTTPS──► Nginx ──/api──► FastAPI (bac
         └────────────── Redis pub/sub ◄──────── Worker (LangGraph) ───────┘
                                                    │  tools (permission-checked)
                                                    ▼
-                     Claude API · OpenAI · Gmail · Calendar · Drive · GitHub · WhatsApp · Twilio · Exotel · n8n · MCP · Web
+                     OpenAI · (optional) Claude · Gmail · Calendar · Drive · GitHub · WhatsApp · Twilio · Exotel · n8n · MCP · Web
 ```
 
 ## Request lifecycle
@@ -79,9 +79,12 @@ prompt repeats this.
 - `RoutedSession` keeps a provider-native transcript (so Claude's thinking/tool blocks are replayed unchanged)
   **and** a neutral transcript, so it can fail over mid-run to the next model in the chain
   (`agent model → FALLBACK_MODEL → DEFAULT_MODEL`), skipping providers without keys.
-- Claude: `claude-opus-5-5` default, `output_config.effort`, adaptive thinking, prompt caching on the system
-  prompt, hosted web search for research agents, server-side refusal fallback (`fallbacks: "default"`) and
-  `refusal` stop-reason handling.
+- **OpenAI (default)**: Chat Completions with function calling for every agent (`gpt-5.1`; `gpt-5-mini` for
+  memory extraction and as fallback), `reasoning_effort` mapped from each agent's effort level, live web search
+  as a `web_search` tool backed by the Responses API's hosted search (`WEB_SEARCH_MODEL`), embeddings
+  (`text-embedding-3-small`) and voice (transcription + TTS).
+- **Claude (optional)**: set `ANTHROPIC_API_KEY` and choose a `claude-*` model for any agent. Agents on Claude
+  use Anthropic's hosted web search instead of the `web_search` tool.
 - Every call (success or failure) writes a `usage_records` row with tokens, cache tokens, cost (pricing table,
   overridable with `MODEL_PRICING_JSON`), latency, request id and whether fallback was used. A per-user monthly
   budget blocks new calls once reached.

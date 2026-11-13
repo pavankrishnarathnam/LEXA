@@ -26,8 +26,8 @@ Edit `/opt/lexa/.env` (it is `chmod 600` and git-ignored):
 
 | Variable | Required | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | yes | primary model provider |
-| `OPENAI_API_KEY` | recommended | fallback model, semantic embeddings, server voice |
+| `OPENAI_API_KEY` | yes | models, web search, embeddings, voice |
+| `ANTHROPIC_API_KEY` | optional | only if you assign Claude models to agents |
 | `LEXA_DOMAIN`, `PUBLIC_URL`, `API_URL`, `CORS_ORIGINS` | yes | set by the installer |
 | `COOKIE_SECURE=true` | yes | required behind HTTPS (startup fails otherwise) |
 | `ALLOW_REGISTRATION` | | set to `false` after creating your account |

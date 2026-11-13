@@ -14,7 +14,7 @@ import { AGENT_ICON_NAMES, AgentIcon } from "@/components/layout/agent-icon";
 import { cn } from "@/lib/utils";
 import type { Agent, ToolInfo } from "@/types";
 
-const MODELS = ["", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-2", "gpt-5.1", "gpt-5-mini"];
+const MODELS = ["", "gpt-5.1", "gpt-5-mini", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
 const RISK_TONE: Record<string, "success" | "neutral" | "warning" | "danger"> = { read: "success", internal: "neutral", external: "warning", sensitive: "danger" };
 
 export function AgentForm({ agent }: { agent?: Agent }) {

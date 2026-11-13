@@ -37,10 +37,10 @@ GOOGLE_REVOKE = "https://oauth2.googleapis.com/revoke"
 PROVIDERS: dict[str, ProviderSpec] = {
     p.key: p
     for p in [
-        ProviderSpec("anthropic", "Anthropic Claude", "Primary intelligence provider (server-side API key).",
+        ProviderSpec("openai", "OpenAI", "Primary intelligence provider: agents, web search, embeddings and voice "
+                     "(server-side API key).", "ai", "config", docs_url="https://platform.openai.com/docs"),
+        ProviderSpec("anthropic", "Anthropic Claude", "Optional alternative model provider (server-side API key).",
                      "ai", "config", docs_url="https://docs.claude.com"),
-        ProviderSpec("openai", "OpenAI", "Secondary model provider, embeddings and voice (server-side API key).",
-                     "ai", "config", docs_url="https://platform.openai.com/docs"),
         ProviderSpec("gmail", "Gmail", "Read, draft and send authorized email.", "communication", "oauth2",
                      scopes=("https://www.googleapis.com/auth/gmail.modify",),
                      scope_descriptions=("Read, draft, label and send email (no permanent deletion)",),

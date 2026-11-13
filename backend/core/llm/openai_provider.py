@@ -40,6 +40,13 @@ def _map_error(exc: Exception) -> ProviderError:
                          status=getattr(exc, "status_code", None))
 
 
+def reasoning_effort(model: str, effort: str | None) -> str | None:
+    """Map LEXA effort levels onto OpenAI reasoning_effort for reasoning models (gpt-5*, o-series)."""
+    if not effort or not model.startswith(("gpt-5", "o1", "o3", "o4")):
+        return None
+    return {"low": "low", "medium": "medium", "high": "high", "xhigh": "high", "max": "high"}.get(effort)
+
+
 def _usage(u: Any) -> Usage:
     if not u:
         return Usage()
@@ -88,6 +95,9 @@ class OpenAISession:
         client = get_client()
         params: dict[str, Any] = {"model": self.model, "messages": self.messages,
                                   "max_completion_tokens": self.max_tokens}
+        effort = reasoning_effort(self.model, self.effort)
+        if effort:
+            params["reasoning_effort"] = effort
         if self.tools:
             params["tools"] = [
                 {"type": "function", "function": {"name": t.name, "description": t.description,
@@ -107,7 +117,14 @@ class OpenAISession:
             except json.JSONDecodeError:
                 args = {"_invalid_json": tc.function.arguments}
             calls.append(ToolCall(id=tc.id, name=tc.function.name, input=args))
-        self.messages.append(msg.model_dump(exclude_none=True))
+        assistant: dict[str, Any] = {"role": "assistant", "content": msg.content or ""}
+        if msg.tool_calls:
+            assistant["tool_calls"] = [
+                {"id": tc.id, "type": "function",
+                 "function": {"name": tc.function.name, "arguments": tc.function.arguments or "{}"}}
+                for tc in msg.tool_calls
+            ]
+        self.messages.append(assistant)
         stop = {"tool_calls": "tool_use", "length": "max_tokens", "content_filter": "refusal"}.get(
             choice.finish_reason or "", "end_turn")
         return LLMResponse(text=(msg.content or "").strip(), tool_calls=calls, stop_reason=stop,
@@ -127,9 +144,13 @@ async def stream_text(model: str, system: str, messages: list[dict[str, Any]], e
     usage = Usage()
     model_used = model
     try:
+        extra: dict[str, Any] = {}
+        eff = reasoning_effort(model, effort)
+        if eff:
+            extra["reasoning_effort"] = eff
         stream = await client.chat.completions.create(model=model, messages=oa_messages, stream=True,
                                                       max_completion_tokens=max_tokens,
-                                                      stream_options={"include_usage": True})
+                                                      stream_options={"include_usage": True}, **extra)
         async for chunk in stream:
             model_used = chunk.model or model_used
             if chunk.usage:
@@ -141,6 +162,30 @@ async def stream_text(model: str, system: str, messages: list[dict[str, Any]], e
         raise _map_error(exc) from exc
     yield "final", LLMResponse(text="".join(parts), tool_calls=[], stop_reason="end_turn", usage=usage,
                                model=model_used, provider="openai")
+
+
+async def web_search(query: str, model: str | None = None) -> tuple[str, list[dict[str, str]], Usage, str]:
+    """Live web search through the Responses API's hosted web_search tool. Returns (answer, citations, usage, model)."""
+    client = get_client()
+    model = model or settings.web_search_model
+    try:
+        resp = await client.responses.create(
+            model=model, tools=[{"type": "web_search"}], max_output_tokens=4000,
+            instructions="Search the web and answer factually and concisely. Include concrete details (names, "
+                         "dates, numbers) and cite sources. Say so if results are inconclusive.",
+            input=query)
+    except openai.APIError as exc:
+        raise _map_error(exc) from exc
+    citations: dict[str, dict[str, str]] = {}
+    for item in resp.output or []:
+        for part in getattr(item, "content", None) or []:
+            for ann in getattr(part, "annotations", None) or []:
+                url = getattr(ann, "url", None)
+                if url:
+                    citations[url] = {"url": url, "title": getattr(ann, "title", "") or url}
+    u = resp.usage
+    usage = Usage(input_tokens=getattr(u, "input_tokens", 0) or 0, output_tokens=getattr(u, "output_tokens", 0) or 0)
+    return resp.output_text or "", list(citations.values()), usage, resp.model or model
 
 
 async def embed(texts: list[str]) -> tuple[list[list[float]], int]:

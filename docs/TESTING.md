@@ -9,7 +9,7 @@ pgvector 0.8, Redis 7). Results below are from actual runs on the final commit.
 |---|---|
 | Backend lint (`ruff`, incl. bandit-style `S` rules) | ✅ 0 issues |
 | Backend types (`mypy`, 78 files) | ✅ 0 issues |
-| Backend tests (`pytest`, real Postgres + Redis) | ✅ **32 passed** |
+| Backend tests (`pytest`, real Postgres + Redis) | ✅ **37 passed** |
 | Migrations: upgrade → downgrade → upgrade, `alembic check` | ✅ |
 | Frontend lint (`eslint`, React Compiler rules) | ✅ 0 errors (32 warnings: `any` on loosely-typed JSON) |
 | Frontend types (`tsc --noEmit`) | ✅ |
@@ -60,9 +60,11 @@ delegation, tool execution, policies, approvals, fallback, accounting, persisten
 The scripted provider is not included in production images (`tests/` is excluded by `.dockerignore`).
 
 ## Not verified here (needs credentials you hold)
-- Live calls to the Claude API and OpenAI (keys not available). The Anthropic integration uses the official
-  `anthropic` 2.8 SDK; request shape (model `claude-opus-5-5`, `output_config.effort`, server-side refusal
-  fallback, hosted web search) was checked against the installed SDK signatures, not against the live API.
+- Live calls to OpenAI (no key available). The OpenAI path is tested against the official `openai` 3.50 SDK's
+  own response types with a mocked client (`tests/test_openai_provider.py`: tool calls, transcript replay,
+  reasoning effort, Responses-API web search with citations, agents receiving the search tool), but not
+  against the live API. Model names `gpt-5.1` / `gpt-5-mini` and their prices in `core/llm/pricing.py` should be
+  checked against OpenAI's current list (override with `DEFAULT_MODEL` / `MODEL_PRICING_JSON`).
 - Real Gmail / Calendar / Drive / GitHub OAuth, WhatsApp, Twilio, Exotel, n8n and MCP endpoints.
 - Let's Encrypt issuance (requires a public domain); HTTPS was verified with a self-signed certificate.
 - GitHub Actions execution (no repository access from this environment; workflows were validated locally by

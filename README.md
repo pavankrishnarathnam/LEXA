@@ -5,8 +5,8 @@ your request, delegates to specialist agents (in parallel where possible), uses 
 allowed, asks for your approval before acting on the outside world, remembers what matters, and reports
 honestly what was done, what is pending and what failed.
 
-- **Claude-first** (Anthropic Claude API as primary model provider), OpenAI as secondary/fallback, embeddings
-  and voice.
+- **Runs on OpenAI**: `gpt-5.1` for planning and agents, `gpt-5-mini` for fast tasks and live web search,
+  OpenAI embeddings for memory and OpenAI voice. Claude models can optionally be added per agent.
 - **9 built-in specialist agents** + custom agents you define in the dashboard (no code changes).
 - **Durable execution**: tasks run in a background worker from a Postgres job queue; the LangGraph state is
   checkpointed in Postgres, so a crashed run resumes where it stopped.
@@ -20,7 +20,7 @@ honestly what was done, what is pending and what failed.
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/pavankrishnarathnam/LEXA?quickstart=1)
 
-1. Add `ANTHROPIC_API_KEY` as a Codespaces secret (GitHub → Settings → Codespaces → Secrets, access: `LEXA`).
+1. Add `OPENAI_API_KEY` as a Codespaces secret (GitHub → Settings → Codespaces → Secrets, access: `LEXA`).
 2. Click the button above (or **Code → Codespaces → Create codespace on main**).
 3. After about 3–5 minutes the LEXA tab opens. Register; the first account is the owner.
 
@@ -47,7 +47,7 @@ is described under *Production* below.
 | **LEXA CORE** | Chief AI Assistant | Plans, delegates (parallel/sequential), synthesizes, never claims unverified success |
 | Career | Personal Career Manager | Web job search, deduplicated job tracking, explainable match scores, tailored (never fabricated) applications; submission needs approval |
 | Communication | Communication Manager | Gmail read/triage/summarize, drafts, sends (approval), WhatsApp Business, SMS (Twilio/Exotel), contacts, follow-ups |
-| Research | Research Analyst | Claude web search + page fetch (robots.txt respected), cited reports; facts vs estimates vs assumptions |
+| Research | Research Analyst | Live web search (OpenAI) + page fetch (robots.txt respected), cited reports; facts vs estimates vs assumptions |
 | Developer | Software Engineer | GitHub repos, PR diffs/reviews, issues, CI status; branches/issues/PRs via approval; never deploys or deletes |
 | Finance | Finance Assistant | Ledger, budgets, subscriptions, bill reminders — **cannot** move money |
 | Personal Secretary | Productivity Manager | Calendar, scheduling, meeting prep, reminders, daily plans, Drive |
@@ -72,7 +72,7 @@ cd backend && python -m venv .venv && . .venv/bin/activate && pip install -r req
 ```
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...   # required for real agent work
+export OPENAI_API_KEY=sk-...   # required for real agent work
 python -m alembic upgrade head
 uvicorn main:app --reload --port 8000      # API  (docs at http://localhost:8000/api/docs)
 ```

@@ -61,7 +61,7 @@ function Permissions() {
       </CardContent></Card>
       <Card><CardHeader><CardTitle>AI providers & models</CardTitle></CardHeader><CardContent className="grid gap-2 text-sm sm:grid-cols-2">
         {info && Object.entries({ "Primary model": info.default_model, "Fast model (memory, extraction)": info.fast_model, "Fallback model": info.fallback_model,
-          "Default effort": info.default_effort, "Embeddings": info.embedding_model, "Claude refusal fallback": info.server_side_refusal_fallback ? "enabled" : "disabled" }).map(([k, v]) => (
+          "Default effort": info.default_effort, "Web search": info.web_search_model, "Embeddings": info.embedding_model }).map(([k, v]) => (
           <div key={k} className="flex justify-between rounded-lg bg-surface-2/60 px-3 py-2"><span className="text-muted">{k}</span><span className="font-mono text-xs">{String(v)}</span></div>))}
         <p className="text-xs text-subtle sm:col-span-2">Server-level defaults come from environment variables. Per-agent models are set in Agents.</p>
       </CardContent></Card>

@@ -93,7 +93,7 @@ export default function CommandCenter() {
         {data && !data.providers.anthropic && !data.providers.openai && (
           <div className="mt-6 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
             <Plug className="mt-0.5 size-3.5 shrink-0" />
-            <p className="min-w-0 break-words">No AI provider is configured on the server. Set <code className="font-mono break-all">ANTHROPIC_API_KEY</code> (and optionally <code className="font-mono break-all">OPENAI_API_KEY</code>) in the backend environment to enable agents.</p>
+            <p className="min-w-0 break-words">No AI provider is configured on the server. Set <code className="font-mono break-all">OPENAI_API_KEY</code> (in Codespaces: a Codespaces secret, then rebuild) to enable agents.</p>
           </div>
         )}
       </section>

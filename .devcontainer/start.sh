@@ -45,5 +45,5 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 echo "[lexa] LEXA is running → ${PUBLIC_URL:-http://localhost:3000}"
-[ -z "${ANTHROPIC_API_KEY:-}" ] && echo "[lexa] NOTE: ANTHROPIC_API_KEY is not set — add it as a Codespaces secret, then rebuild." || true
+[ -z "${OPENAI_API_KEY:-}" ] && echo "[lexa] NOTE: OPENAI_API_KEY is not set — add it as a Codespaces secret, then rebuild." || true
 echo "[lexa] Logs: $LOGS"

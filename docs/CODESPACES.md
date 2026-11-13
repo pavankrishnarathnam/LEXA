@@ -5,8 +5,10 @@ PostgreSQL + pgvector, Redis, the API, the background worker and the web app.
 
 ## 1. Add your API key (once)
 GitHub → **Settings** (your profile) → **Codespaces** → **Secrets** → *New secret*:
-- `ANTHROPIC_API_KEY`: your Claude key (required for agents). Under *Repository access* select `LEXA`.
-- `OPENAI_API_KEY`: optional (fallback model, semantic memory search, server voice).
+- `OPENAI_API_KEY`: your OpenAI API key from platform.openai.com (required). Under *Repository access* select
+  `LEXA`. The API is billed per use, separately from a ChatGPT subscription; set a monthly limit in LEXA under
+  Settings → AI & permissions, and in your OpenAI billing settings.
+- Optional: `DEFAULT_MODEL` (default `gpt-5.1`), or `gpt-5-mini` for a cheaper setup.
 
 ## 2. Start LEXA
 On the repository page: **Code → Codespaces → Create codespace on main**.

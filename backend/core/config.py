@@ -31,9 +31,11 @@ class Settings(BaseSettings):
     # AI providers
     anthropic_api_key: str = ""
     openai_api_key: str = ""
-    default_model: str = "claude-opus-5-5"
-    fast_model: str = "claude-haiku-5-5"
-    fallback_model: str = "gpt-5.1"
+    # OpenAI is the default provider; Claude models remain available per agent or as fallback.
+    default_model: str = "gpt-5.1"
+    fast_model: str = "gpt-5-mini"
+    fallback_model: str = "gpt-5-mini"
+    web_search_model: str = "gpt-5-mini"
     default_effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
     anthropic_server_fallback: bool = True
     embedding_model: str = "text-embedding-3-small"

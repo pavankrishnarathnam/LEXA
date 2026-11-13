@@ -17,7 +17,7 @@ from agents.registry import AgentConfig
 from agents.tools import TOOLS, ToolContext, ToolResult
 from agents.tools.base import validate_args
 from core.config import settings
-from core.llm.router import CallContext, RoutedSession
+from core.llm.router import CallContext, RoutedSession, model_chain, provider_configured, resolve_provider
 from core.llm.types import ServerTool
 from core.logging import get_logger
 from core.redis import publish_event
@@ -103,7 +103,18 @@ async def run_agent(cfg: AgentConfig, user_id: uuid.UUID, instruction: str, *, t
     assert user is not None
     tool_names, missing = await _available_tools(user_id, cfg)
     system = await build_system_prompt(cfg, user, instruction, missing, extra_context)
-    server_tools = [ServerTool("web_search", max_uses=6)] if cfg.web_search else []
+    # Web search: Claude models use Anthropic's hosted search; every other model uses the web_search tool
+    # (OpenAI Responses API).
+    wants_search = cfg.web_search or "web_search" in tool_names
+    chain = [m for m in model_chain(cfg.model) if provider_configured(resolve_provider(m))]
+    claude_primary = bool(chain) and resolve_provider(chain[0]) == "anthropic"
+    server_tools: list[ServerTool] = []
+    tool_names = [n for n in tool_names if n != "web_search"]
+    if wants_search and claude_primary:
+        server_tools = [ServerTool("web_search", max_uses=6)]
+    elif wants_search and provider_configured("openai"):
+        tool_names.append("web_search")
+    allowed = set(tool_names)
     session = RoutedSession(CallContext(user_id, purpose="agent", task_id=task_id, agent_slug=cfg.slug),
                             cfg.model, system, [TOOLS[n].spec() for n in tool_names], server_tools,
                             effort=cfg.effort, max_tokens=16000)
@@ -140,7 +151,8 @@ async def run_agent(cfg: AgentConfig, user_id: uuid.UUID, instruction: str, *, t
             result.error = "cost_limit"
             break
         tool_results: list[tuple[str, str, bool]] = []
-        outcomes = await asyncio.gather(*[_execute_call(cfg, user, call.name, call.input, task_id, step_id, result)
+        outcomes = await asyncio.gather(*[_execute_call(cfg, user, call.name, call.input, task_id, step_id, result,
+                                                        allowed)
                                           for call in resp.tool_calls])
         for call, out in zip(resp.tool_calls, outcomes, strict=True):
             tool_results.append((call.id, out.for_model(), out.is_error))
@@ -152,11 +164,11 @@ async def run_agent(cfg: AgentConfig, user_id: uuid.UUID, instruction: str, *, t
 
 
 async def _execute_call(cfg: AgentConfig, user: User, name: str, args: dict[str, Any], task_id: uuid.UUID | None,
-                        step_id: str, result: AgentRunResult) -> ToolResult:
+                        step_id: str, result: AgentRunResult, allowed: set[str]) -> ToolResult:
     record: dict[str, Any] = {"tool": name, "args": _redact(args), "at": datetime.now(UTC).isoformat()}
     result.tool_calls.append(record)
     t = TOOLS.get(name)
-    if t is None or name not in cfg.tools:
+    if t is None or name not in allowed:
         record["outcome"] = "denied:not_assigned"
         return ToolResult(f"Tool '{name}' is not available to this agent.", is_error=True)
     err = validate_args(t, args)

@@ -14,12 +14,9 @@
     "8000": { "label": "LEXA API", "onAutoForward": "silent" }
   },
   "secrets": {
-    "ANTHROPIC_API_KEY": {
-      "description": "Claude API key (primary AI provider). Required for agents to work.",
-      "documentationUrl": "https://console.anthropic.com/settings/keys"
-    },
     "OPENAI_API_KEY": {
-      "description": "Optional: OpenAI key for fallback model, semantic embeddings and server voice."
+      "description": "OpenAI API key. Required: powers all agents, web search, memory embeddings and voice.",
+      "documentationUrl": "https://platform.openai.com/api-keys"
     }
   },
   "postCreateCommand": "bash .devcontainer/setup.sh",

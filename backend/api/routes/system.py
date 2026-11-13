@@ -230,7 +230,8 @@ async def deployments(user: CurrentUser, db: DB) -> list[dict]:
 async def system_info(user: CurrentUser) -> dict:
     return {"version": VERSION, "environment": settings.environment, "default_model": settings.default_model,
             "fast_model": settings.fast_model, "fallback_model": settings.fallback_model,
-            "default_effort": settings.default_effort, "embedding_model": settings.embedding_model
+            "default_effort": settings.default_effort, "web_search_model": settings.web_search_model,
+            "embedding_model": settings.embedding_model
             if settings.openai_api_key else "lexa-hash-v1 (local lexical fallback)",
             "server_side_refusal_fallback": settings.anthropic_server_fallback,
             "registration_open": settings.allow_registration}
