@@ -16,6 +16,18 @@ honestly what was done, what is pending and what failed.
 
 ![stack](https://img.shields.io/badge/stack-Next.js%2016%20·%20FastAPI%20·%20LangGraph%20·%20Postgres%2Fpgvector%20·%20Redis-7c5cff)
 
+## Run it on GitHub (no server needed)
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/pavankrishnarathnam/LEXA?quickstart=1)
+
+1. Add `ANTHROPIC_API_KEY` as a Codespaces secret (GitHub → Settings → Codespaces → Secrets, access: `LEXA`).
+2. Click the button above (or **Code → Codespaces → Create codespace on main**).
+3. After about 3–5 minutes the LEXA tab opens. Register; the first account is the owner.
+
+Your codespace URL is private to your GitHub account. LEXA runs while the codespace is open and keeps all data
+when it stops. Details: [`docs/CODESPACES.md`](docs/CODESPACES.md). A self-hosted 24/7 option (any Linux VPS)
+is described under *Production* below.
+
 ## Contents
 
 | Path | What |
@@ -75,7 +87,7 @@ cd frontend && npm ci && npm run dev       # http://localhost:3000 (proxies /api
 
 The first account you register becomes the **owner**. Set `ALLOW_REGISTRATION=false` afterwards.
 
-## Production
+## Production (optional, self-hosted 24/7)
 
 One command per step on a fresh Ubuntu/Debian VPS (Hostinger KVM or any Linux VPS) — full guide in
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md):
