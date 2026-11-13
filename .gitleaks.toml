@@ -1,0 +1,11 @@
+# gitleaks configuration: default rules, plus an allowlist for the synthetic credentials used to test
+# LEXA's own secret detection.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic credentials in secret-detection tests"
+paths = [
+  '''backend/tests/test_memory_and_policy\.py''',
+  '''backend/tests/test_platform\.py''',
+]

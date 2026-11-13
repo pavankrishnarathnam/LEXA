@@ -20,7 +20,7 @@ jobs:
         with: { fetch-depth: 0 }
       - name: gitleaks
         run: |
-          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.3 git /repo --redact --verbose --exit-code 1
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.3 git /repo --config /repo/.gitleaks.toml --redact --verbose --exit-code 1
 
   dependencies:
     name: Dependency vulnerabilities
