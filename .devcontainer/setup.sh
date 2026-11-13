@@ -23,4 +23,8 @@ echo "[lexa] Installing and building the frontend"
 cd "$ROOT/frontend"
 npm ci --no-audit --no-fund
 NEXT_TELEMETRY_DISABLED=1 BACKEND_URL=http://127.0.0.1:8000 npm run build
+# The build output is a standalone server (same as the Docker image); it needs its static assets beside it.
+rm -rf .next/standalone/.next/static .next/standalone/public
+cp -r .next/static .next/standalone/.next/static
+cp -r public .next/standalone/public
 echo "[lexa] Setup complete"

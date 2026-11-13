@@ -37,8 +37,14 @@ pkill -f "next-server" 2>/dev/null || true
 
 setsid nohup "$PY" -m uvicorn main:app --host 0.0.0.0 --port 8000 > "$LOGS/api.log" 2>&1 &
 setsid nohup "$PY" -m workers.main > "$LOGS/worker.log" 2>&1 &
+pkill -f "standalone/server.js" 2>/dev/null || true
 cd "$ROOT/frontend"
-BACKEND_URL=http://127.0.0.1:8000 NEXT_TELEMETRY_DISABLED=1 setsid nohup npx next start -p 3000 > "$LOGS/web.log" 2>&1 &
+if [ ! -f .next/standalone/server.js ]; then
+  echo "[lexa] Frontend build missing — running setup first"; bash "$ROOT/.devcontainer/setup.sh"
+fi
+# Standalone Next.js server bound to all interfaces so Codespaces port forwarding can reach it.
+HOSTNAME=0.0.0.0 PORT=3000 BACKEND_URL=http://127.0.0.1:8000 NEXT_TELEMETRY_DISABLED=1 NODE_ENV=production \
+  setsid nohup node .next/standalone/server.js > "$LOGS/web.log" 2>&1 &
 
 for _ in $(seq 1 30); do
   curl -fsS http://127.0.0.1:8000/api/health >/dev/null 2>&1 && curl -fsS -o /dev/null http://127.0.0.1:3000/login && break
