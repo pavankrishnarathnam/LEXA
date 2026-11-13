@@ -26,3 +26,5 @@ backups/
 .DS_Store
 test-results/
 playwright-report/
+.deploy-state
+deployments.log

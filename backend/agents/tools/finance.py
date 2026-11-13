@@ -52,14 +52,14 @@ async def finance_summary(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
     subs = [e for e in rows if e.kind == "subscription" and e.active]
     monthly_subs = sum(e.amount * {"yearly": 1 / 12, "weekly": 4.33}.get(e.recurrence or "monthly", 1) for e in subs)
     upcoming = sorted([e for e in rows if e.kind == "bill" and e.due_on and e.due_on >= datetime.now(UTC)],
-                      key=lambda e: e.due_on)[:10]
+                      key=lambda e: e.due_on or datetime.max.replace(tzinfo=UTC))[:10]
     lines = [f"Window: last {days} days", f"Income: {income:.2f}", f"Spending: {expense:.2f}",
              f"Net: {income - expense:.2f}", "By category:"]
     lines += [f"  - {c}: {v:.2f}" for c, v in sorted(by_cat.items(), key=lambda x: -x[1])]
     lines.append(f"Active subscriptions: {len(subs)} (~{monthly_subs:.2f}/month)")
     lines += [f"  - {s.description or s.category}: {s.amount} {s.currency} {s.recurrence or 'monthly'}" for s in subs]
     lines.append("Upcoming bills:")
-    lines += [f"  - {b.due_on.date()}: {b.description} {b.amount} {b.currency}" for b in upcoming]
+    lines += [f"  - {b.due_on.date() if b.due_on else '?'}: {b.description} {b.amount} {b.currency}" for b in upcoming]
     if not rows:
         lines.append("(Ledger is empty — the user needs to add entries or import statements.)")
     return ToolResult("\n".join(lines), {"income": income, "expense": expense, "by_category": dict(by_cat),

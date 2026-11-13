@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Annotated, Any, TypedDict
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy, Send
@@ -197,8 +198,9 @@ async def run_step_node(inp: StepInput) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001 - step failure is recorded, other steps continue
         error = f"{type(exc).__name__}: {exc}"
     async with SessionLocal() as db:
-        ex = await db.get(TaskExecution, ex_id)
-        assert ex is not None
+        ex_row = await db.get(TaskExecution, ex_id)
+        assert ex_row is not None
+        ex = ex_row
         ex.status = {"completed": TaskStatus.COMPLETED, "waiting_for_approval": TaskStatus.WAITING_FOR_APPROVAL}.get(
             status, TaskStatus.FAILED)
         ex.output, ex.error, ex.finished_at = output, error, datetime.now(UTC)
@@ -260,7 +262,8 @@ def build_graph() -> StateGraph:
     g = StateGraph(GraphState)
     g.add_node("plan", plan_node, retry_policy=RetryPolicy(max_attempts=3, retry_on=_retryable))
     g.add_node("schedule", schedule_node)
-    g.add_node("run_step", run_step_node, retry_policy=RetryPolicy(max_attempts=3, retry_on=_retryable))
+    # run_step receives a Send payload (StepInput), which LangGraph's node typing does not model.
+    g.add_node("run_step", run_step_node, retry_policy=RetryPolicy(max_attempts=3, retry_on=_retryable))  # type: ignore[arg-type]
     g.add_node("synthesize", synthesize_node, retry_policy=RetryPolicy(max_attempts=2, retry_on=_retryable))
     g.add_edge(START, "plan")
     g.add_edge("plan", "schedule")
@@ -303,7 +306,7 @@ async def execute_task(task_id: uuid.UUID) -> None:
                                                            Message.task_id != task_id)
                                      .order_by(Message.created_at.desc()).limit(8))).scalars().all()
             history = "\n".join(f"{m.role.upper()}: {m.content[:1500]}" for m in reversed(rows))
-    config = {"configurable": {"thread_id": str(task_id)}, "recursion_limit": 40}
+    config: RunnableConfig = {"configurable": {"thread_id": str(task_id)}, "recursion_limit": 40}
     async with checkpointer() as saver:
         graph = build_graph().compile(checkpointer=saver)
         snapshot = await graph.aget_state(config)

@@ -1,0 +1,28 @@
+{
+  "name": "Inbound lead → LEXA draft reply",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "inbound-lead", "responseMode": "onReceived" },
+      "name": "Lead form webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.LEXA_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "X-Lexa-Secret", "value": "={{ $vars.LEXA_SECRET }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ kind: 'lead', name: $json.body.name, email: $json.body.email, message: $json.body.message }) }}"
+      },
+      "name": "Send to LEXA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [520, 300]
+    }
+  ],
+  "connections": { "Lead form webhook": { "main": [[{ "node": "Send to LEXA", "type": "main", "index": 0 }]] } }
+}

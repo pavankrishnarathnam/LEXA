@@ -59,4 +59,4 @@ async def recover_stale(db: AsyncSession, older_than_seconds: int) -> int:
                                    WHERE status='running' AND locked_at < now() - make_interval(secs => :s)"""),
                            {"s": older_than_seconds})
     await db.commit()
-    return res.rowcount or 0
+    return getattr(res, "rowcount", 0) or 0

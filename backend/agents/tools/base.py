@@ -101,7 +101,7 @@ def validate_args(t: ToolDef, args: dict[str, Any]) -> str | None:
     for req in t.input_schema.get("required", []):
         if req not in args or args[req] in (None, ""):
             return f"missing required argument '{req}'"
-    type_map = {"string": str, "integer": int, "number": (int, float), "boolean": bool, "array": list, "object": dict}
+    type_map: dict[str, type | tuple[type, ...]] = {"string": str, "integer": int, "number": (int, float), "boolean": bool, "array": list, "object": dict}
     for k, v in args.items():
         if k not in props:
             return f"unexpected argument '{k}'"

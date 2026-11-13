@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import os
+import tempfile
 
+_TMP = tempfile.mkdtemp(prefix="lexa-test-")
 os.environ.update({
     "DATABASE_URL": os.environ.get("TEST_DATABASE_URL", "postgresql+asyncpg://lexa:lexa@127.0.0.1:5432/lexa_test"),
     "REDIS_URL": os.environ.get("TEST_REDIS_URL", "redis://127.0.0.1:6379/15"),
     "ENVIRONMENT": "test", "ANTHROPIC_API_KEY": "", "OPENAI_API_KEY": "",
     "DEFAULT_MODEL": "test-model", "FAST_MODEL": "test-fast", "FALLBACK_MODEL": "test-fallback",
     "JWT_SECRET": "test-secret-0123456789-0123456789-0123456789", "RATE_LIMIT_PER_MINUTE": "10000", "AUTH_RATE_LIMIT": "10000",
-    "UPLOAD_DIR": "/tmp/lexa-test-uploads",
-    "MODEL_PRICING_JSON": '{"test-model": [1.0, 5.0], "test-fallback": [1.0, 5.0], "test-fast": [0.1, 0.5]}', "BACKUP_STATUS_FILE": "/tmp/lexa-test-backup.json",
+    "UPLOAD_DIR": os.path.join(_TMP, "uploads"),
+    "MODEL_PRICING_JSON": '{"test-model": [1.0, 5.0], "test-fallback": [1.0, 5.0], "test-fast": [0.1, 0.5]}', "BACKUP_STATUS_FILE": os.path.join(_TMP, "backup.json"),
 })
 
 import asyncio  # noqa: E402

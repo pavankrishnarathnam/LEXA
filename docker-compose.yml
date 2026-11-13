@@ -1,0 +1,151 @@
+# LEXA production stack. Only Nginx publishes ports; Postgres and Redis are reachable only on the
+# internal network.
+#   Local build & run:  docker compose build && docker compose up -d
+#   VPS deployment:     infrastructure/scripts/deploy.sh <version>  (pulls versioned images from GHCR)
+name: lexa
+
+x-backend: &backend
+  image: ${LEXA_REGISTRY:-ghcr.io/your-github-user}/lexa-backend:${LEXA_VERSION:-latest}
+  build:
+    context: ./backend
+    args:
+      APP_VERSION: ${LEXA_VERSION:-dev}
+      INSTALL_BROWSER: ${INSTALL_BROWSER:-false}
+  env_file: .env
+  environment:
+    ENVIRONMENT: production
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-lexa}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-lexa}
+    REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379/0
+    APP_VERSION: ${LEXA_VERSION:-dev}
+    BACKUP_STATUS_FILE: /backups/last_backup.json
+  volumes:
+    - uploads:/data/uploads
+    - ./backups:/backups:ro
+  networks: [internal]
+  restart: unless-stopped
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lexa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-lexa}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lexa} -d ${POSTGRES_DB:-lexa}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy: { resources: { limits: { memory: 1g } } }
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}", "--appendonly", "yes",
+              "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+    volumes: [redisdata:/data]
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy: { resources: { limits: { memory: 320m } } }
+
+  # One-shot: applies database migrations before the API and worker start.
+  migrate:
+    <<: *backend
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    restart: "no"
+
+  backend:
+    <<: *backend
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    deploy: { resources: { limits: { memory: 1g } } }
+
+  worker:
+    <<: *backend
+    command: ["python", "-m", "workers.main"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-m", "workers.healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    deploy: { resources: { limits: { memory: 1g } } }
+
+  frontend:
+    image: ${LEXA_REGISTRY:-ghcr.io/your-github-user}/lexa-frontend:${LEXA_VERSION:-latest}
+    build:
+      context: ./frontend
+      args: { BACKEND_URL: "http://backend:8000" }
+    networks: [internal]
+    restart: unless-stopped
+    depends_on:
+      backend: { condition: service_healthy }
+    deploy: { resources: { limits: { memory: 512m } } }
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports: ["${HTTP_PORT:-80}:80", "${HTTPS_PORT:-443}:443"]
+    environment:
+      LEXA_DOMAIN: ${LEXA_DOMAIN:?set LEXA_DOMAIN}
+    volumes:
+      - ./infrastructure/nginx/templates:/etc/nginx/templates:ro
+      - ./infrastructure/nginx/snippets:/etc/nginx/snippets:ro
+      - certs:/etc/letsencrypt
+      - acme:/var/www/certbot
+    networks: [internal]
+    restart: unless-stopped
+    depends_on:
+      frontend: { condition: service_healthy }
+      backend: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
+  # Renews Let's Encrypt certificates (initial issuance: infrastructure/scripts/init-letsencrypt.sh).
+  certbot:
+    image: certbot/certbot:v3.1.0
+    volumes:
+      - certs:/etc/letsencrypt
+      - acme:/var/www/certbot
+    entrypoint: ["/bin/sh", "/renew.sh"]
+    configs:
+      - source: certbot_renew
+        target: /renew.sh
+    restart: unless-stopped
+    profiles: ["tls"]
+
+configs:
+  certbot_renew:
+    content: |
+      while true; do
+        certbot renew --webroot -w /var/www/certbot --quiet --deploy-hook "touch /etc/letsencrypt/.renewed"
+        sleep 43200
+      done
+
+networks:
+  internal: {}
+
+volumes:
+  pgdata: {}
+  redisdata: {}
+  uploads: {}
+  certs: {}
+  acme: {}

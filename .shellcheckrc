@@ -1,0 +1,2 @@
+# Scripts intentionally source the runtime .env / os-release, which are not available to the linter.
+disable=SC1091

@@ -32,7 +32,7 @@ def html_to_text(html: str, base_url: str = "") -> tuple[str, str, list[dict[str
     for tag in soup(["script", "style", "noscript", "svg", "iframe"]):
         tag.decompose()
     title = (soup.title.string or "").strip() if soup.title and soup.title.string else ""
-    links = [{"text": a.get_text(" ", strip=True)[:120], "href": urljoin(base_url, a["href"])}
+    links = [{"text": a.get_text(" ", strip=True)[:120], "href": urljoin(base_url, str(a["href"]))}
              for a in soup.find_all("a", href=True)][:60]
     text = "\n".join(line.strip() for line in soup.get_text("\n").splitlines() if line.strip())
     return title, text, links

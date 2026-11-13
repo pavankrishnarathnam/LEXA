@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Response
 from sqlalchemy import Date, cast, func, select, text, update
@@ -62,7 +63,7 @@ async def ready(response: Response) -> dict:
         await r.ping()
         hb = await r.get("lexa:worker:heartbeat")
         checks["redis"] = {"ok": True}
-        age = (datetime.now(UTC) - datetime.fromisoformat(hb)).total_seconds() if hb else None
+        age = (datetime.now(UTC) - datetime.fromisoformat(str(hb))).total_seconds() if hb else None
         checks["worker"] = {"ok": age is not None and age < 90, "last_heartbeat_seconds": age}
     except Exception as exc:  # noqa: BLE001
         checks["redis"] = {"ok": False, "error": type(exc).__name__}
@@ -141,7 +142,7 @@ async def mark_read(body: dict, user: CurrentUser, db: DB) -> dict:
         import uuid
         q = q.where(Notification.id.in_([uuid.UUID(i) for i in body["ids"]]))
     res = await db.execute(q.values(read=True))
-    return {"updated": res.rowcount}
+    return {"updated": getattr(res, "rowcount", 0)}
 
 
 @router.get("/api/usage")
@@ -202,7 +203,7 @@ async def export_data(user: CurrentUser, db: DB) -> Response:
             out.append(d)
         return out
 
-    data = {"exported_at": datetime.now(UTC).isoformat(), "user": {"email": user.email, "full_name": user.full_name,
+    data: dict[str, Any] = {"exported_at": datetime.now(UTC).isoformat(), "user": {"email": user.email, "full_name": user.full_name,
                                                                     "settings": user.settings}}
     for name, model, excl in [
         ("profile", UserProfile, ()), ("memories", Memory, ("embedding",)), ("conversations", Conversation, ()),

@@ -96,8 +96,8 @@ async def apply_retention(body: dict, user: CurrentUser, db: DB) -> dict:
         q = q.where(Memory.source == "extracted")
     res = await db.execute(q)
     await audit(db, user_id=user.id, action="memory.retention", category="memory",
-                details={"days": days, "deleted": res.rowcount})
-    return {"deleted": res.rowcount}
+                details={"days": days, "deleted": getattr(res, "rowcount", 0)})
+    return {"deleted": getattr(res, "rowcount", 0)}
 
 
 @router.delete("", status_code=200)
@@ -105,5 +105,5 @@ async def delete_all(user: CurrentUser, db: DB, confirm: str = "") -> dict:
     if confirm != "DELETE":
         raise HTTPException(422, "Pass confirm=DELETE to erase all memories")
     res = await db.execute(delete(Memory).where(Memory.user_id == user.id))
-    await audit(db, user_id=user.id, action="memory.delete_all", category="memory", details={"deleted": res.rowcount})
-    return {"deleted": res.rowcount}
+    await audit(db, user_id=user.id, action="memory.delete_all", category="memory", details={"deleted": getattr(res, "rowcount", 0)})
+    return {"deleted": getattr(res, "rowcount", 0)}

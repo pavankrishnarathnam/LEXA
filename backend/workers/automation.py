@@ -15,7 +15,7 @@ from workers.scheduler import next_run
 
 def conditions_match(conditions: list[dict[str, Any]], payload: dict[str, Any]) -> bool:
     for c in conditions or []:
-        val = payload
+        val: Any = payload
         for part in str(c.get("field", "")).split("."):
             val = val.get(part) if isinstance(val, dict) else None
         op, target = c.get("op", "eq"), c.get("value")

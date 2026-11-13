@@ -31,13 +31,13 @@ def _set_session(response: Response, user: User) -> str:
     access = create_access_token(user.id, user.role.value)
     refresh = create_refresh_token(user.id, user.token_version)
     csrf = new_csrf_token()
-    common = {"secure": settings.cookie_secure, "samesite": "lax", "domain": settings.cookie_domain}
+    secure, domain = settings.cookie_secure, settings.cookie_domain
     response.set_cookie(ACCESS_COOKIE, access, httponly=True, max_age=settings.jwt_access_ttl_minutes * 60,
-                        path="/", **common)
+                        path="/", secure=secure, samesite="lax", domain=domain)
     response.set_cookie(REFRESH_COOKIE, refresh, httponly=True, max_age=settings.jwt_refresh_ttl_days * 86400,
-                        path="/api/auth", **common)
+                        path="/api/auth", secure=secure, samesite="lax", domain=domain)
     response.set_cookie(CSRF_COOKIE, csrf, httponly=False, max_age=settings.jwt_refresh_ttl_days * 86400,
-                        path="/", **common)
+                        path="/", secure=secure, samesite="lax", domain=domain)
     return access
 
 

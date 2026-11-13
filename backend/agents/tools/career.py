@@ -64,6 +64,7 @@ async def job_save(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
     if created:
         job = JobOpportunity(user_id=ctx.user_id, fingerprint=fp, title=a["title"], company=a["company"])
         ctx.db.add(job)
+    assert job is not None
     for k in ("url", "location", "remote_type", "employment_type", "description", "required_skills", "salary_min",
               "salary_max", "salary_currency", "source"):
         if a.get(k) not in (None, ""):

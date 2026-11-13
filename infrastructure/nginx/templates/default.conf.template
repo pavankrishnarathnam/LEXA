@@ -1,0 +1,68 @@
+# Rendered at container start by the nginx image's envsubst step (only ${LEXA_DOMAIN} is substituted).
+# Resolve service names through Docker's DNS at request time, so containers recreated by a deploy
+# (with new IPs) are picked up without restarting Nginx.
+resolver 127.0.0.11 valid=10s ipv6=off;
+map $host $lexa_backend  { default http://backend:8000; }
+map $host $lexa_frontend { default http://frontend:3000; }
+
+limit_req_zone $binary_remote_addr zone=lexa_api:10m rate=20r/s;
+limit_req_zone $binary_remote_addr zone=lexa_auth:10m rate=10r/m;
+
+server {
+    listen 80;
+    server_name ${LEXA_DOMAIN};
+
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location = /nginx-health { access_log off; return 200 "ok\n"; }
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${LEXA_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${LEXA_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${LEXA_DOMAIN}/privkey.pem;
+    include /etc/nginx/snippets/ssl.conf;
+    include /etc/nginx/snippets/security-headers.conf;
+
+    client_max_body_size 25m;
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml text/plain;
+
+    # Server-Sent Events: never buffer or compress.
+    location = /api/events {
+        proxy_pass $lexa_backend;
+        include /etc/nginx/snippets/proxy.conf;
+        proxy_buffering off;
+        proxy_cache off;
+        gzip off;
+        proxy_read_timeout 1h;
+    }
+
+    location ~ ^/api/auth/(login|register|refresh)$ {
+        limit_req zone=lexa_auth burst=10 nodelay;
+        proxy_pass $lexa_backend;
+        include /etc/nginx/snippets/proxy.conf;
+    }
+
+    location /api/ {
+        limit_req zone=lexa_api burst=60 nodelay;
+        proxy_pass $lexa_backend;
+        include /etc/nginx/snippets/proxy.conf;
+        proxy_read_timeout 300s;
+    }
+
+    location /_next/static/ {
+        proxy_pass $lexa_frontend;
+        include /etc/nginx/snippets/proxy.conf;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location / {
+        proxy_pass $lexa_frontend;
+        include /etc/nginx/snippets/proxy.conf;
+    }
+}
