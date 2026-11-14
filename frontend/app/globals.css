@@ -9,16 +9,19 @@
   --elevated: #ffffff;
   --foreground: #121218;
   --muted: #5d5d6e;
-  --subtle: #8a8a9a;
+  --subtle: #6b6b7c; /* >= 4.6:1 on every light surface (WCAG AA for small text) */
   --border: rgba(18, 18, 30, 0.09);
   --border-strong: rgba(18, 18, 30, 0.16);
-  --primary: #6d4aff;
+  --primary: #5b3de0;
+  --primary-text: #5b3de0; /* primary used as text on its own tint */
+  --success-solid: #166534; /* backgrounds that carry white text */
+  --danger-solid: #b91c1c;
   --primary-foreground: #ffffff;
-  --accent: #2f7bff;
+  --accent: #1a56c4;
   --ring: rgba(109, 74, 255, 0.45);
-  --success: #16a34a;
-  --warning: #d97706;
-  --danger: #dc2626;
+  --success: #166534;
+  --warning: #92400e;
+  --danger: #b91c1c;
   --glass: rgba(255, 255, 255, 0.7);
   --shadow: 0 1px 2px rgba(16, 16, 32, 0.04), 0 8px 24px rgba(16, 16, 32, 0.06);
   --grad: linear-gradient(135deg, #6d4aff 0%, #2f7bff 100%);
@@ -31,10 +34,13 @@
   --elevated: #1b1b25;
   --foreground: #ececf3;
   --muted: #a0a0b2;
-  --subtle: #6f6f82;
+  --subtle: #8a8aa0; /* >= 5:1 on every dark surface */
   --border: rgba(255, 255, 255, 0.07);
   --border-strong: rgba(255, 255, 255, 0.13);
   --primary: #7c5cff;
+  --primary-text: #a592ff;
+  --success-solid: #15803d;
+  --danger-solid: #b91c1c;
   --primary-foreground: #ffffff;
   --accent: #4d8dff;
   --ring: rgba(124, 92, 255, 0.5);
@@ -58,6 +64,9 @@
   --color-border-strong: var(--border-strong);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-text: var(--primary-text);
+  --color-success-solid: var(--success-solid);
+  --color-danger-solid: var(--danger-solid);
   --color-accent: var(--accent);
   --color-success: var(--success);
   --color-warning: var(--warning);
@@ -70,6 +79,13 @@
 
 * {
   border-color: var(--border);
+}
+
+/* A bare `grid` gets one implicit *auto* column, which grows to its widest unbreakable child. On a phone that made whole
+   pages wider than the screen (the browser then zooms out and fixed bars slide off-screen). Default to one flexible
+   column; the `sm:`/`lg:` grid-cols-* utilities (higher layer) still override it. */
+@layer base {
+  .grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 html,

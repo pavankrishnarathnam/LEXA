@@ -13,6 +13,9 @@ honestly what was done, what is pending and what failed.
 - **Human-in-the-loop**: three permission modes; sensitive actions always need approval; approved actions run
   with exactly the parameters you saw.
 - **Persistent memory** in PostgreSQL + pgvector, user-editable, secret-rejecting, exportable.
+- **Completely voice accessible**: press **Alt + V** and talk. Ask for anything, navigate, hear the page, click, fill in
+  forms, answer dialogs, and approve actions that were first read to you in full. Works with a screen reader and
+  without a mouse; see [`docs/VOICE.md`](docs/VOICE.md).
 
 ![stack](https://img.shields.io/badge/stack-Next.js%2016%20·%20FastAPI%20·%20LangGraph%20·%20Postgres%2Fpgvector%20·%20Redis-7c5cff)
 
@@ -34,7 +37,7 @@ is described under *Production* below.
 |---|---|
 | `backend/` | FastAPI API, LangGraph orchestration, agents & tools, memory, integrations, worker, Alembic migrations, tests |
 | `frontend/` | Next.js App Router UI (React 19, Tailwind v4, shadcn-style Radix components, Framer Motion, Recharts) |
-| `tests/e2e/` | Playwright end-to-end suite (desktop + mobile) |
+| `tests/e2e/` | Playwright end-to-end suite (desktop, mobile, voice with a fake microphone, accessibility audit) |
 | `infrastructure/` | Nginx (HTTPS) config, VPS install / TLS / deploy / backup / restore scripts |
 | `automation/` | n8n integration notes and example workflow |
 | `.github/workflows/` | `ci.yml`, `deploy.yml`, `security.yml` |
@@ -109,8 +112,8 @@ Or publish a GitHub release and let `deploy.yml` build, publish and deploy it (w
 ## Testing
 
 ```bash
-cd backend && pytest -q                       # 32 tests: API, isolation, policy, orchestration, durability
-cd frontend && npm run lint && npm run typecheck && npm test && npm run build
+cd backend && pytest -q                       # 53 tests: API, isolation, policy, orchestration, durability, voice
+cd frontend && npm run lint && npm run typecheck && npm test && npm run build   # 167 unit tests incl. voice
 cd tests/e2e && npx playwright test           # needs backend/tests/e2e_server.py + `next start` running
 ```
 
@@ -119,7 +122,8 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the latest results and what is (and
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) · [Security](docs/SECURITY.md) · [Deployment](docs/DEPLOYMENT.md) ·
-  [Backup & restore](docs/BACKUP.md) · [Testing report](docs/TESTING.md) · [Deployment report](docs/DEPLOYMENT_REPORT.md)
+  [Backup & restore](docs/BACKUP.md) · [Voice](docs/VOICE.md) · [Testing report](docs/TESTING.md) ·
+  [Deployment report](docs/DEPLOYMENT_REPORT.md)
 
 ## License
 

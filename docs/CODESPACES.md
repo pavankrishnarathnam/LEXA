@@ -33,6 +33,12 @@ The address is **private**: only your signed-in GitHub account can open it. Leav
 > though the app is healthy. `start.sh` therefore tests the real forwarded address and, if it fails, moves LEXA to
 > another port (3100 → 3101 → 3102 → 3000) until one works, then remembers it for the next start.
 
+## Using LEXA by voice
+Press **Alt + V** (or use the *Voice* button in the header) in the LEXA tab. The browser asks for microphone
+permission once: allow it. Codespaces addresses are HTTPS, which browsers require for microphone access. Speech
+recognition uses the same `OPENAI_API_KEY`; without it LEXA starts in a text-only voice mode and tells you why.
+Everything voice can do, the safety rules for approvals, costs and troubleshooting: [`VOICE.md`](VOICE.md).
+
 ## 3. Day to day
 - Your codespace **stops when idle** (30 minutes by default; up to 4 hours under GitHub → Settings → Codespaces →
   *Default idle timeout*). All data (database, memory, uploads) is kept. Reopen the codespace from

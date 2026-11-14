@@ -184,4 +184,22 @@ test.describe.serial("voice", () => {
     await typed(page, "read the last reply");
     await expect(bar(page).getByTestId("voice-said")).toContainText("fun fact", { timeout: 10_000 });
   });
+
+  test("without speech recognition configured, voice mode still works as text-only and says why", async ({ page }) => {
+    await page.request.get("/api/test/voice-available?on=0");
+    try {
+      const caps = page.waitForResponse((r) => r.url().includes("/api/voice/capabilities"));
+      await login(page);
+      await caps;
+      await voiceOn(page);
+      await expect(bar(page).getByTestId("voice-phase")).toHaveText("Voice (text only)");
+      await expect(bar(page)).toContainText("OPENAI_API_KEY");
+      await typed(page, "go to tasks");
+      await expect(page).toHaveURL(/\/tasks$/);
+      await typed(page, "stop listening");
+      await expect(bar(page)).toHaveCount(0, { timeout: 10_000 });
+    } finally {
+      await page.request.get("/api/test/voice-available?on=1");
+    }
+  });
 });

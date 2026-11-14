@@ -165,7 +165,7 @@ export default function CommandCenter() {
                   <span className="grid size-7 place-items-center rounded-md bg-surface-2"><AgentIcon name={a.icon} className="size-3.5 text-primary" /></span>
                   <span className="min-w-0 flex-1 truncate text-[13px]">{a.name.replace(" Agent", "")}</span>
                   <span className={cn("size-2 rounded-full", a.status === "busy" ? "bg-primary animate-pulse" : a.status === "ready" ? "bg-success" : "bg-subtle")}
-                    aria-label={a.status} title={a.status} />
+                    role="img" aria-label={a.status} title={a.status} />
                 </Link></li>
               ))}
             </ul>
@@ -177,7 +177,7 @@ export default function CommandCenter() {
           <CardContent>
             <p className="text-2xl font-semibold tabular-nums">{usd(data?.usage.month_spend_usd)}</p>
             <p className="text-xs text-subtle">of {usd(data?.usage.budget_usd)} budget</p>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuenow={Math.round(budgetPct)} aria-valuemin={0} aria-valuemax={100}>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-label="AI budget used this month" aria-valuenow={Math.round(budgetPct)} aria-valuemin={0} aria-valuemax={100}>
               <div className={cn("h-full rounded-full", budgetPct > 85 ? "bg-danger" : "bg-grad")} style={{ width: `${budgetPct}%` }} />
             </div>
           </CardContent>

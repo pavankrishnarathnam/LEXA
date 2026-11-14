@@ -154,11 +154,11 @@ function Notifications() {
     setData((data || []).map((n) => ({ ...n, read: true })));
   };
   return (
+    <div className="relative">
     <Dropdown>
-      <DropdownTrigger className="relative grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
+      <DropdownTrigger className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
         aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}>
         <Bell className="size-4" />
-        {unread > 0 && <span className="absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-[9px] font-semibold text-white">{unread > 9 ? "9+" : unread}</span>}
       </DropdownTrigger>
       <DropdownContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
@@ -184,6 +184,8 @@ function Notifications() {
         </div>
       </DropdownContent>
     </Dropdown>
+    {unread > 0 && <span aria-hidden className="pointer-events-none absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full bg-[color-mix(in_srgb,var(--primary)_80%,black)] px-1 text-[9px] font-semibold text-white">{unread > 9 ? "9+" : unread}</span>}
+    </div>
   );
 }
 
@@ -193,7 +195,7 @@ function VoiceButton() {
   return (
     <button type="button" onClick={toggle} aria-pressed={on} aria-label="Voice mode" aria-keyshortcuts="Alt+V" title="Voice mode (Alt+V)"
       className={cn("flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm transition hover:bg-surface-2",
-        on ? "bg-primary/15 text-primary" : "text-muted hover:text-foreground")}>
+        on ? "bg-primary/15 text-primary-text" : "text-muted hover:text-foreground")}>
       {on ? <Mic className="size-4" /> : <MicOff className="size-4" />}
       <span className="hidden sm:inline" aria-hidden>Voice</span>
     </button>
@@ -236,7 +238,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-white">Skip to content</a>
-      <button type="button" onClick={voice.toggle} aria-keyshortcuts="Alt+V"
+      <button type="button" data-voice-ui onClick={voice.toggle} aria-keyshortcuts="Alt+V"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-14 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-white">
         {voice.snap.active ? "Turn voice control off (Alt+V)" : "Turn voice control on (Alt+V)"}
       </button>

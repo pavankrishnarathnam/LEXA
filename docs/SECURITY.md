@@ -29,6 +29,17 @@
   for web fetch, n8n and MCP URLs.
 - Per-agent cost and iteration limits; per-user monthly budget; per-task timeouts.
 
+## Voice
+- The microphone is opened only while voice mode is on, only in a signed-in session, and only finished sentences are
+  uploaded (`/api/voice/transcribe` needs the session cookie and CSRF token like every write). Audio is transcribed and
+  discarded; LEXA stores text and token counts only. Uploads are size/duration limited, type-sniffed, rate limited
+  (40/min) and counted against the monthly AI budget.
+- Voice cannot lower any protection: approvals require the full action to have been read, high-risk ones a second
+  explicit approval, speech heard while LEXA talks can never approve or confirm, destructive controls need a spoken yes,
+  password and key fields are never dictated or read back, and approved actions run with exactly the stored parameters.
+- Sentences that were not recognised as commands go to LEXA CORE like typed requests, with the same permission mode,
+  untrusted-content wrapping and audit trail.
+
 ## Infrastructure
 - Only Nginx is exposed (80/443); Postgres/Redis are on the internal Docker network; Redis requires a password.
 - HTTPS via Let's Encrypt, TLS 1.2/1.3, HSTS, `X-Frame-Options: DENY`, `nosniff`, strict CSP from Next.js.

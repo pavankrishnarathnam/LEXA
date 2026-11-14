@@ -100,7 +100,7 @@ export default function AutomationsPage() {
         <div className="space-y-2">{data.map((w) => (
           <Card key={w.id}><CardContent className="pt-4">
             <div className="flex flex-wrap items-center gap-3">
-              <span className={`size-2 rounded-full ${w.enabled ? "bg-success" : "bg-subtle"}`} aria-label={w.enabled ? "enabled" : "paused"} />
+              <span role="img" className={`size-2 rounded-full ${w.enabled ? "bg-success" : "bg-subtle"}`} aria-label={w.enabled ? "enabled" : "paused"} />
               <button className="min-w-0 flex-1 text-left" onClick={() => setExpanded(expanded === w.id ? null : w.id)}>
                 <p className="truncate text-sm font-medium">{w.name}</p>
                 <p className="truncate text-xs text-subtle">{w.instruction}</p>

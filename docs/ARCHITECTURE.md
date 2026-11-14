@@ -126,7 +126,17 @@ so it gets the same planning, permissions, approvals and audit trail.
 
 ## Voice
 
-Browser SpeechRecognition (or server transcription via OpenAI when unavailable), server TTS via OpenAI
-(`gpt-4o-mini-tts`) with browser speech synthesis fallback, barge-in (speaking stops playback), animated orb
-driven by live mic level. The browser never listens in the background; always-on wake words require a separate
-desktop/mobile companion (not included).
+Full description: [`VOICE.md`](VOICE.md). In short:
+
+* **Browser** (`frontend/lib/voice`): microphone → AudioWorklet → voice-activity detector → 16 kHz WAV per sentence →
+  `POST /api/voice/transcribe`. A local **command grammar** answers navigation, reading, clicking/filling by accessible
+  name, approvals and status instantly; anything else goes to LEXA CORE with `voice: true`, which makes the planner, the
+  agents and the synthesizer reply in short spoken sentences.
+* **Server** (`backend/api/routes/voice.py`): transcription (`gpt-4o-mini-transcribe`, fallback `whisper-1`) and
+  speech (`gpt-4o-mini-tts`, fallback `tts-1`) through the OpenAI provider, with sniffed audio formats, size/duration
+  limits, per-user rate limits, budget checks and usage records (`purpose = stt | tts`).
+* **Controller** (`lib/voice/controller.ts`) is a framework-free state machine (store for React via
+  `useSyncExternalStore`) that enforces the voice safety rules: approvals are read to the end first, high-risk ones need a
+  second explicit “approve”, “never mind” never decides, nothing confirmable is accepted while LEXA speaks, its own voice
+  is filtered out, destructive controls need a spoken yes, password-like fields are never dictated.
+* The browser only listens while voice mode is on; there is no background listening. Audio is not stored.

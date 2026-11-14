@@ -11,6 +11,8 @@ os.environ.setdefault("DEFAULT_MODEL", "test-model")
 os.environ.setdefault("FALLBACK_MODEL", "test-fallback")
 os.environ.setdefault("FAST_MODEL", "test-fast")
 os.environ.setdefault("AUTH_RATE_LIMIT", "10000")  # e2e logs in many times from one IP
+os.environ.setdefault("RATE_LIMIT_PER_MINUTE", "100000")  # the suite polls and navigates far faster than a person
+os.environ.setdefault("VOICE_STT_PER_MINUTE", "100000")
 os.environ.setdefault("MODEL_PRICING_JSON", '{"test-model": [4.0, 20.0], "test-fallback": [2.0, 10.0], "test-fast": [0.1, 0.5]}')
 
 import uvicorn  # noqa: E402
@@ -107,6 +109,7 @@ async def fake_synthesize(text: str, voice: str) -> tuple[bytes, str]:
 openai_provider.transcribe = fake_transcribe  # type: ignore[assignment]
 openai_provider.synthesize = fake_synthesize  # type: ignore[assignment]
 voice_routes.voice_available = lambda: True  # type: ignore[assignment]
+voice_routes.TTS_PER_MINUTE = 100_000
 
 control = APIRouter(prefix="/api/test", tags=["test-harness-only"])
 
@@ -116,6 +119,13 @@ async def set_voice_script(texts: str = "") -> dict:
     """Queues what the next spoken utterances will be 'transcribed' as: ?texts=open automations|approve"""
     VOICE_TEXTS[:] = [t for t in texts.split("|") if t]
     return {"queued": len(VOICE_TEXTS)}
+
+
+@control.get("/voice-available")
+async def set_voice_available(on: int = 1) -> dict:
+    """Pretends the server has (1) or lacks (0) an OpenAI key, to test voice mode without speech recognition."""
+    voice_routes.voice_available = (lambda: True) if on else (lambda: False)  # type: ignore[assignment]
+    return {"available": bool(on)}
 
 
 app_module.app.include_router(control)
