@@ -57,7 +57,9 @@ async def handle_run_task(payload: dict[str, Any], attempts: int, max_attempts: 
             await task_log(task_id, user_id, f"Attempt {attempts} failed ({type(exc).__name__}: {exc}); will retry "
                                              "from last checkpoint", level="warning", agent="core")
             raise
-        await _fail_task(task_id, user_id, f"{type(exc).__name__}: {exc}")
+        # Provider and budget errors already read as sentences for people ("OpenAI says this account has no credits...").
+        reason = str(exc) if isinstance(exc, ProviderError | BudgetExceeded) else f"{type(exc).__name__}: {exc}"
+        await _fail_task(task_id, user_id, reason)
         return
     async with SessionLocal() as db:
         task = await db.get(Task, task_id)

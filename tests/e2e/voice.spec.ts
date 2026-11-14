@@ -24,6 +24,45 @@ async function queue(page: Page, ...texts: string[]) {
 }
 
 const toggle = (page: Page) => page.locator("header").getByRole("button", { name: "Voice mode", exact: true });
+/** A browser like Firefox: no built-in speech recognition. */
+const NO_BROWSER_STT = () => {
+  // Chromium defines both names (on the Window prototype), so shadow both.
+  for (const name of ["SpeechRecognition", "webkitSpeechRecognition"]) {
+    Object.defineProperty(window, name, { value: undefined, configurable: true, writable: true });
+  }
+};
+
+/** A browser like Chrome or Edge: a built-in recogniser the test can make "hear" sentences. */
+const FAKE_BROWSER_STT = () => {
+  const w = window as unknown as { __speech: unknown };
+  class FakeRecognition {
+    continuous = false; interimResults = false; lang = ""; maxAlternatives = 1;
+    onstart: (() => void) | null = null; onend: (() => void) | null = null;
+    onerror: ((e: { error: string }) => void) | null = null;
+    onresult: ((e: { resultIndex: number; results: unknown[] }) => void) | null = null;
+    start() { (w.__speech as { active: unknown }).active = this; setTimeout(() => this.onstart?.(), 0); }
+    stop() {}
+    abort() { const sp = w.__speech as { active: unknown }; if (sp.active === this) sp.active = null; }
+  }
+  for (const name of ["SpeechRecognition", "webkitSpeechRecognition"]) {
+    Object.defineProperty(window, name, { value: FakeRecognition, configurable: true, writable: true });
+  }
+  w.__speech = {
+    active: null as null | FakeRecognition,
+    say(this: { active: FakeRecognition | null }, text: string, isFinal = true) {
+      if (!this.active) throw new Error("the browser is not listening");
+      this.active.onresult?.({ resultIndex: 0, results: [Object.assign([{ transcript: text, confidence: 0.9 }], { isFinal })] });
+    },
+  };
+};
+const browserHears = (page: Page, text: string) => page.evaluate((t) => (window as unknown as { __speech: { say(t: string): void } }).__speech.say(t), text);
+
+/** Puts the speech-recognition choice back to "auto" (the signed-in session's cookies + CSRF token, like the app does). */
+async function resetRecognition(page: Page) {
+  const csrf = (await page.context().cookies()).find((c) => c.name === "lexa_csrf")?.value ?? "";
+  await page.request.patch("/api/auth/me/settings", { data: { voice_recognition: "auto" }, headers: { "X-CSRF-Token": csrf } });
+}
+
 const bar = (page: Page) => page.getByRole("region", { name: "Voice control" });
 const box = (page: Page) => page.getByLabel("Type a command for LEXA");
 
@@ -61,7 +100,7 @@ test.describe.serial("voice", () => {
     await expect(page).toHaveURL(/\/tasks$/);
     await typed(page, "open voice settings");
     await expect(page).toHaveURL(/\/settings\?tab=voice/);
-    await expect(page.getByText("Speech recognition")).toBeVisible();
+    await expect(page.getByLabel("Speech recognition")).toBeVisible();
     await typed(page, "where am I");
     await expect(bar(page).getByTestId("voice-said")).toContainText("You are on Settings");
     await typed(page, "what can I click");
@@ -185,7 +224,8 @@ test.describe.serial("voice", () => {
     await expect(bar(page).getByTestId("voice-said")).toContainText("fun fact", { timeout: 10_000 });
   });
 
-  test("without speech recognition configured, voice mode still works as text-only and says why", async ({ page }) => {
+  test("no key on the server and a browser without recognition (Firefox): text-only, and it says why", async ({ page }) => {
+    await page.addInitScript(NO_BROWSER_STT);
     await page.request.get("/api/test/voice-available?on=0");
     try {
       const caps = page.waitForResponse((r) => r.url().includes("/api/voice/capabilities"));
@@ -193,13 +233,58 @@ test.describe.serial("voice", () => {
       await caps;
       await voiceOn(page);
       await expect(bar(page).getByTestId("voice-phase")).toHaveText("Voice (text only)");
-      await expect(bar(page)).toContainText("OPENAI_API_KEY");
+      await expect(bar(page).getByTestId("voice-engine")).toContainText("Can't hear you");
+      await expect(bar(page)).toContainText("OpenAI API key");
+      await expect(bar(page)).toContainText("Firefox does not");
       await typed(page, "go to tasks");
       await expect(page).toHaveURL(/\/tasks$/);
       await typed(page, "stop listening");
       await expect(bar(page)).toHaveCount(0, { timeout: 10_000 });
     } finally {
       await page.request.get("/api/test/voice-available?on=1");
+    }
+  });
+
+  test("OpenAI has no credits: LEXA explains it and carries on with the browser's free recognition", async ({ page }) => {
+    await page.addInitScript(FAKE_BROWSER_STT);
+    await queue(page, "this sentence reaches OpenAI first");
+    await page.request.get("/api/test/voice-credits?on=0");
+    try {
+      await login(page);
+      await voiceOn(page);
+      // The first sentence goes to OpenAI (the default), which answers "no credits remaining"...
+      await expect(bar(page).getByTestId("voice-engine")).toContainText("browser's free speech recognition", { timeout: 25_000 });
+      await bar(page).getByText("Transcript").click();
+      await expect(bar(page).getByRole("log")).toContainText("Your OpenAI account has no credits left, so I'm switching to your browser's free speech recognition");
+      // ...and from then on the browser's own recogniser understands you, with live partial text and no upload.
+      await page.evaluate(() => (window as unknown as { __speech: { say(t: string, f: boolean): void } }).__speech.say("open autom", false));
+      await expect(bar(page).getByTestId("voice-interim")).toContainText("open autom");
+      await browserHears(page, "Open automations.");
+      await expect(page).toHaveURL(/\/automations/, { timeout: 10_000 });
+      await expect(bar(page).getByTestId("voice-heard")).toContainText("Open automations");
+    } finally {
+      await page.request.get("/api/test/voice-credits?on=1");
+    }
+  });
+
+  test("choosing the browser recogniser in Settings (by voice) listens with it from the start", async ({ page }) => {
+    await page.addInitScript(FAKE_BROWSER_STT);
+    await login(page);
+    try {
+      await page.goto("/settings?tab=voice");
+      await voiceOn(page);
+      await typed(page, "set speech recognition to browser only");
+      await expect(page.getByLabel("Speech recognition")).toHaveValue("browser");
+      await page.keyboard.press("Alt+KeyV");
+      await expect(bar(page)).toHaveCount(0);
+      await voiceOn(page);
+      await expect(bar(page).getByTestId("voice-engine")).toContainText("browser's free speech recognition");
+      await page.waitForTimeout(600); // a person does not start talking in the same instant the start-up chime plays
+      await browserHears(page, "go to tasks");
+      await expect(page).toHaveURL(/\/tasks$/, { timeout: 10_000 });
+      await page.keyboard.press("Alt+KeyV");
+    } finally {
+      await resetRecognition(page); // never leak this choice into other tests
     }
   });
 });

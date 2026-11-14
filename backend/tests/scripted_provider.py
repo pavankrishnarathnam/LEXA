@@ -5,10 +5,11 @@ import json
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
-from core.llm.types import LLMResponse, NeutralTurn, ProviderError, ToolCall, ToolSpec, Usage
+from core.llm.openai_provider import NO_CREDITS_MESSAGE
+from core.llm.types import NO_CREDITS, LLMResponse, NeutralTurn, ProviderError, ToolCall, ToolSpec, Usage
 
 Script = Callable[[str, list[dict[str, Any]], list[str]], LLMResponse]
-STATE: dict[str, Any] = {"script": None, "fail_models": set(), "calls": []}
+STATE: dict[str, Any] = {"script": None, "fail_models": set(), "no_credit_models": set(), "calls": []}
 
 
 def resp(text: str = "", calls: list[tuple[str, dict[str, Any]]] | None = None, model: str = "test-model") -> LLMResponse:
@@ -39,6 +40,8 @@ class ScriptedSession:
 
     async def step(self) -> LLMResponse:
         STATE["calls"].append(self.model)
+        if self.model in STATE["no_credit_models"]:
+            raise ProviderError(NO_CREDITS_MESSAGE, retryable=False, provider="scripted", status=402, code=NO_CREDITS)
         if self.model in STATE["fail_models"]:
             raise ProviderError(f"{self.model} unavailable", retryable=True, provider="scripted", status=529)
         r = STATE["script"](self.system, self.messages, self.tools)

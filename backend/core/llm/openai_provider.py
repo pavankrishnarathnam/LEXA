@@ -10,6 +10,8 @@ from openai import AsyncOpenAI
 
 from core.config import settings
 from core.llm.types import (
+    INVALID_KEY,
+    NO_CREDITS,
     LLMResponse,
     NeutralTurn,
     ProviderError,
@@ -32,12 +34,36 @@ def get_client() -> AsyncOpenAI:
     return _client
 
 
+NO_CREDITS_MESSAGE = (
+    "OpenAI says this account has no credits left (error 429, insufficient_quota). Add credits at "
+    "https://platform.openai.com/settings/organization/billing - the API is billed separately from a ChatGPT "
+    "subscription - then try again."
+)
+INVALID_KEY_MESSAGE = (
+    "OpenAI rejected the API key (it is invalid or was revoked). Check OPENAI_API_KEY (in Codespaces: the secret, "
+    "then rebuild the container)."
+)
+_NO_CREDITS_HINTS = ("insufficient_quota", "no credits", "exceeded your current quota", "check your plan and billing")
+
+
+def _is_no_credits(exc: Exception) -> bool:
+    """A 429 that is really 'your balance is empty' (retrying only wastes time), not a momentary rate limit."""
+    if not isinstance(exc, openai.RateLimitError):
+        return False
+    text = f"{getattr(exc, 'code', '')} {getattr(exc, 'type', '')} {exc}".lower()
+    return any(h in text for h in _NO_CREDITS_HINTS)
+
+
 def _map_error(exc: Exception) -> ProviderError:
+    status = getattr(exc, "status_code", None)
+    if _is_no_credits(exc):
+        return ProviderError(NO_CREDITS_MESSAGE, retryable=False, provider="openai", status=402, code=NO_CREDITS)
+    if isinstance(exc, openai.AuthenticationError):
+        return ProviderError(INVALID_KEY_MESSAGE, retryable=False, provider="openai", status=status, code=INVALID_KEY)
     retryable = isinstance(
         exc, openai.RateLimitError | openai.InternalServerError | openai.APIConnectionError | openai.APITimeoutError
     )
-    return ProviderError(f"OpenAI: {exc}", retryable=retryable, provider="openai",
-                         status=getattr(exc, "status_code", None))
+    return ProviderError(f"OpenAI: {exc}", retryable=retryable, provider="openai", status=status)
 
 
 def reasoning_effort(model: str, effort: str | None) -> str | None:

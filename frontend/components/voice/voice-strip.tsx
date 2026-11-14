@@ -45,9 +45,17 @@ export function VoiceStrip() {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium" data-testid="voice-phase">{snap.listening ? LABEL[snap.phase] : "Voice (text only)"}</p>
             <p className="truncate text-xs text-muted">
-              {snap.heard && <><span className="sr-only">You said: </span><span data-testid="voice-heard">“{snap.heard}”</span></>}
-              {!snap.heard && snap.listening && <span>Say what you need, or “help”.</span>}
+              {snap.interim && <span data-testid="voice-interim" className="italic">“{snap.interim}…”</span>}
+              {!snap.interim && snap.heard && <><span className="sr-only">You said: </span><span data-testid="voice-heard">“{snap.heard}”</span></>}
+              {!snap.interim && !snap.heard && snap.listening && <span>Say what you need, or “help”.</span>}
             </p>
+            {snap.active && (
+              <p className="text-[11px] text-subtle" data-testid="voice-engine">
+                {snap.recognition === "server" ? "Listening with OpenAI speech recognition"
+                  : snap.recognition === "browser" ? "Listening with your browser's free speech recognition"
+                  : "Can't hear you: type commands below"}
+              </p>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {snap.phase === "speaking" && (

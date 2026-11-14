@@ -63,6 +63,7 @@ async def app_ready(database):
 def reset_script():
     STATE["script"] = None
     STATE["fail_models"] = set()
+    STATE["no_credit_models"] = set()
     STATE["calls"] = []
     yield
 

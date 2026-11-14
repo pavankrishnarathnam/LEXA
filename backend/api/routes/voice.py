@@ -9,9 +9,10 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from api.deps import CurrentUser
+from api.errors import CodedHTTPException
 from core.config import settings
 from core.llm import openai_provider
-from core.llm.types import ProviderError, ProviderNotConfigured, Usage
+from core.llm.types import ProviderNotConfigured, Usage
 from core.llm.usage import ensure_budget, record_usage
 from core.redis import rate_limit
 
@@ -112,9 +113,9 @@ async def transcribe(user: CurrentUser, audio: UploadFile = File(...), language:
     try:
         text, model = await openai_provider.transcribe(data, f"speech.{ext}", normalize_language(language))
     except ProviderNotConfigured as exc:
-        raise HTTPException(503, "Speech recognition needs an OpenAI API key (OPENAI_API_KEY).") from exc
-    except ProviderError as exc:
-        raise HTTPException(502, str(exc)) from exc
+        raise CodedHTTPException(503, "Speech recognition needs an OpenAI API key (OPENAI_API_KEY).",
+                                 "not_configured") from exc
+    # Any other ProviderError (no credits, bad key, outage) is turned into a coded response by the app-wide handler.
     seconds = ms / 1000 if ms else len(data) / 32000
     await record_usage(user_id=user.id, provider="openai", model=model,
                        usage=Usage(input_tokens=int(seconds * AUDIO_TOKENS_PER_SECOND)), purpose="stt")
@@ -136,10 +137,8 @@ async def speak(body: SpeakIn, user: CurrentUser) -> Response:
     try:
         audio, model = await openai_provider.synthesize(body.text, voice)
     except ProviderNotConfigured as exc:
-        raise HTTPException(503, "Server text-to-speech needs an OpenAI API key; the browser voice is used instead.") \
-            from exc
-    except ProviderError as exc:
-        raise HTTPException(502, str(exc)) from exc
+        raise CodedHTTPException(503, "Server text-to-speech needs an OpenAI API key; the browser voice is used "
+                                      "instead.", "not_configured") from exc
     seconds = len(body.text) / SPEECH_CHARS_PER_SECOND
     await record_usage(user_id=user.id, provider="openai", model=model, purpose="tts",
                        usage=Usage(input_tokens=len(body.text) // 4 if model.startswith("gpt-4o")

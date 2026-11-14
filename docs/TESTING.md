@@ -8,14 +8,14 @@ pgvector 0.8, Redis 7). Results below are from actual runs on the final commit.
 | Suite | Result |
 |---|---|
 | Backend lint (`ruff`, incl. bandit-style `S` rules) | ✅ 0 issues |
-| Backend types (`mypy`, 79 files) | ✅ 0 issues |
-| Backend tests (`pytest`, real Postgres + Redis) | ✅ **53 passed** (16 of them voice) |
+| Backend types (`mypy`, 80 files) | ✅ 0 issues |
+| Backend tests (`pytest`, real Postgres + Redis) | ✅ **61 passed** (24 voice and provider-error tests) |
 | Migrations: upgrade → downgrade → upgrade, `alembic check` | ✅ |
 | Frontend lint (`eslint`, React Compiler rules) | ✅ 0 errors (27 warnings: `any` on loosely-typed JSON) |
 | Frontend types (`tsc --noEmit`) | ✅ |
-| Frontend unit tests (`vitest`, jsdom, real Radix components) | ✅ **167 passed** (161 voice) |
+| Frontend unit tests (`vitest`, jsdom, real Radix components) | ✅ **188 passed** (182 voice) |
 | Frontend production build (`next build`, 20 routes) | ✅ |
-| End-to-end (`playwright`, Chromium: desktop, Pixel 7, voice with fake microphone, accessibility) | ✅ **25 passed** |
+| End-to-end (`playwright`, Chromium: desktop, Pixel 7, voice with fake microphone, accessibility) | ✅ **27 passed** |
 | Accessibility (`axe-core` 4.14, WCAG 2.1 A/AA; 20 screens × dark/light + dialogs + voice bar + sign-in) | ✅ **0 violations** |
 | Docker images build (backend 107 MB, frontend 87 MB compressed) | ✅ |
 | Full production stack (compose: nginx/HTTPS, frontend, backend, worker, postgres, redis) | ✅ all healthy |
@@ -116,3 +116,10 @@ The scripted provider is not included in production images (`tests/` is excluded
     with `aria-label` but no role.
   - The e2e harness exceeded the per-user rate limit (300 requests/min) with its own polling and was logged out: the
     harness now raises the limit (production defaults are unchanged).
+- **Found from a real screenshot (the user's Codespace):** OpenAI answered HTTP 429 *"You have no credits remaining"* and LEXA
+  (a) treated it as a momentary rate limit, so tasks were retried with backoff and the SDK retried too, (b) tried the
+  fallback model of the same empty account, (c) showed the raw error text (with a truncated link) in the voice bar, and
+  (d) had no free speech path, so voice was dead. Now: the error is classified as `no_credits` (non-retryable, skipped by
+  the fallback chain, HTTP 402 with a code, plain-sentence task failure with the billing link, a Command Center banner), and
+  voice switches to the browser's own recogniser where one exists (Chrome, Edge, Safari) or stays usable as text-only with
+  precise advice (Firefox).

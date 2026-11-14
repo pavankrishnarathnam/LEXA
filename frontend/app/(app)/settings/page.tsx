@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Field, Input, Select } from "@/components/ui/input";
 import { useAuth } from "@/components/layout/auth";
 import { useVoice } from "@/components/voice/voice-provider";
+import { browserRecognitionSupported, isFirefox } from "@/lib/voice/browser-stt";
 import type { PermissionMode, User } from "@/types";
 
 const MODES: { id: PermissionMode; title: string; icon: React.ElementType; desc: string }[] = [
@@ -160,6 +161,8 @@ function VoiceSettings() {
   const voice = useVoice();
   const caps = voice.caps;
   const st = user?.settings ?? {};
+  const browserStt = useSyncExternalStore(() => () => undefined, browserRecognitionSupported, () => false);
+  const firefox = useSyncExternalStore(() => () => undefined, isFirefox, () => false);
   const [speed, setSpeed] = useState<number>(typeof st.voice_speed === "number" ? st.voice_speed : 1);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const changeSpeed = (v: number) => {
@@ -174,9 +177,11 @@ function VoiceSettings() {
         <Button variant={voice.snap.active ? "secondary" : "gradient"} onClick={voice.toggle} aria-pressed={voice.snap.active}>
           <AudioLines />{voice.snap.active ? "Turn voice mode off" : "Turn voice mode on"}</Button></CardHeader>
         <CardContent className="grid gap-2 text-sm sm:grid-cols-2">
-          <div className="flex justify-between rounded-lg bg-surface-2/60 px-3 py-2"><span className="text-muted">Speech recognition</span>
+          <div className="flex justify-between gap-2 rounded-lg bg-surface-2/60 px-3 py-2"><span className="text-muted">OpenAI recognition</span>
             <span>{caps ? (caps.server_stt ? <Badge tone="success">ready · {caps.stt_model}</Badge> : <Badge tone="warning">needs OPENAI_API_KEY</Badge>) : "checking…"}</span></div>
-          <div className="flex justify-between rounded-lg bg-surface-2/60 px-3 py-2"><span className="text-muted">Spoken replies</span>
+          <div className="flex justify-between gap-2 rounded-lg bg-surface-2/60 px-3 py-2"><span className="text-muted">Browser recognition (free)</span>
+            <span>{browserStt ? <Badge tone="success">available here</Badge> : <Badge tone="neutral">{firefox ? "not in Firefox" : "not in this browser"}</Badge>}</span></div>
+          <div className="flex justify-between gap-2 rounded-lg bg-surface-2/60 px-3 py-2"><span className="text-muted">Spoken replies</span>
             <span>{caps ? (caps.server_tts ? <Badge tone="success">ready · {caps.tts_model}</Badge> : <Badge tone="neutral">browser voice</Badge>) : "checking…"}</span></div>
           <p className="text-xs text-subtle sm:col-span-2">
             Shortcut: <kbd className="rounded border border-border px-1">Alt</kbd> + <kbd className="rounded border border-border px-1">V</kbd> toggles voice from anywhere, <kbd className="rounded border border-border px-1">Esc</kbd> stops LEXA talking.
@@ -200,6 +205,11 @@ function VoiceSettings() {
       </CardContent></Card>
 
       <Card><CardHeader><CardTitle>Listening</CardTitle></CardHeader><CardContent className="grid gap-3">
+        <Field label="Speech recognition" hint="Automatic uses OpenAI and switches to your browser's free recognition if OpenAI is unavailable (no key or no credits). The browser option sends your audio to the browser's vendor (Google in Chrome, Microsoft in Edge, Apple in Safari) instead of OpenAI; Firefox has none.">
+          <Select value={st.voice_recognition ?? "auto"} onChange={(e) => void save({ voice_recognition: e.target.value })}>
+            <option value="auto">Automatic (recommended)</option>
+            <option value="server">OpenAI only (about $0.003 per minute of speech)</option>
+            <option value="browser">Browser only (free: Chrome, Edge, Safari)</option></Select></Field>
         <Field label="Spoken language" hint="Detecting automatically works for most people; pick one if you speak mostly one language.">
           <Select value={st.voice_language ?? ""} onChange={(e) => void save({ voice_language: e.target.value })}>
             {LANGUAGES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</Select></Field>

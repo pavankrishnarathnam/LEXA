@@ -33,6 +33,13 @@ The address is **private**: only your signed-in GitHub account can open it. Leav
 > though the app is healthy. `start.sh` therefore tests the real forwarded address and, if it fails, moves LEXA to
 > another port (3100 → 3101 → 3102 → 3000) until one works, then remembers it for the next start.
 
+## "You have no credits remaining" (HTTP 429)
+That message comes from OpenAI: the key works but the account balance is empty. The OpenAI API is prepaid and **billed
+separately from a ChatGPT subscription** (a ChatGPT Plus plan does not include API credit). Add credits at
+<https://platform.openai.com/settings/organization/billing> (a few dollars last a long time with `gpt-5-mini`; set
+`DEFAULT_MODEL=gpt-5-mini` as a Codespaces secret to stretch them). Until then agents cannot answer, but voice commands
+that only operate LEXA keep working, and in Chrome or Edge speech recognition is free (see [`VOICE.md`](VOICE.md)).
+
 ## Using LEXA by voice
 Press **Alt + V** (or use the *Voice* button in the header) in the LEXA tab. The browser asks for microphone
 permission once: allow it. Codespaces addresses are HTTPS, which browsers require for microphone access. Speech

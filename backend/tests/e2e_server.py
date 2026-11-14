@@ -98,11 +98,23 @@ def silent_wav(seconds: float, rate: int = 16000) -> bytes:
     return buf.getvalue()
 
 
+NO_CREDITS_ON = {"on": False}  # simulate an OpenAI account with an empty balance (HTTP 429 insufficient_quota)
+
+
+def _maybe_no_credits() -> None:
+    if NO_CREDITS_ON["on"]:
+        from core.llm.openai_provider import NO_CREDITS_MESSAGE
+        from core.llm.types import NO_CREDITS, ProviderError
+        raise ProviderError(NO_CREDITS_MESSAGE, retryable=False, provider="openai", status=402, code=NO_CREDITS)
+
+
 async def fake_transcribe(audio: bytes, filename: str, language: str | None = None) -> tuple[str, str]:
+    _maybe_no_credits()
     return (VOICE_TEXTS.pop(0) if VOICE_TEXTS else ""), "test-stt"
 
 
 async def fake_synthesize(text: str, voice: str) -> tuple[bytes, str]:
+    _maybe_no_credits()
     return silent_wav(0.4), "test-tts"
 
 
@@ -126,6 +138,13 @@ async def set_voice_available(on: int = 1) -> dict:
     """Pretends the server has (1) or lacks (0) an OpenAI key, to test voice mode without speech recognition."""
     voice_routes.voice_available = (lambda: True) if on else (lambda: False)  # type: ignore[assignment]
     return {"available": bool(on)}
+
+
+@control.get("/voice-credits")
+async def set_voice_credits(on: int = 1) -> dict:
+    """on=0 makes OpenAI answer 'no credits remaining' to speech-to-text and text-to-speech."""
+    NO_CREDITS_ON["on"] = not on
+    return {"credits": bool(on)}
 
 
 app_module.app.include_router(control)

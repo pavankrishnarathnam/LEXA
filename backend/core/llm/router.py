@@ -11,6 +11,8 @@ from core.config import settings
 from core.llm import anthropic_provider, openai_provider
 from core.llm.pricing import provider_for_model
 from core.llm.types import (
+    INVALID_KEY,
+    NO_CREDITS,
     LLMResponse,
     NeutralTurn,
     ProviderError,
@@ -150,6 +152,9 @@ class RoutedSession:
                 if exc.status in (400, 413, 422) and not isinstance(exc, ProviderNotConfigured):
                     raise
                 self._idx += 1
+                if exc.code in (NO_CREDITS, INVALID_KEY):  # another model of the same account would fail the same way
+                    while self._idx < len(self.chain) and resolve_provider(self.chain[self._idx]) == resolve_provider(model):
+                        self._idx += 1
                 if self._idx < len(self.chain):
                     self._session = self._make(self.chain[self._idx])
                 continue
@@ -181,8 +186,11 @@ async def stream_chat(ctx: CallContext, system: str, messages: list[dict[str, An
     if not chain:
         raise ProviderNotConfigured("No AI provider is configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
     last: ProviderError | None = None
+    dead: set[str] = set()  # providers whose account has no credits / whose key was rejected
     for i, m in enumerate(chain):
         provider = resolve_provider(m)
+        if provider in dead:
+            continue
         started = time.monotonic()
         emitted = False
         try:
@@ -205,5 +213,7 @@ async def stream_chat(ctx: CallContext, system: str, messages: list[dict[str, An
             if emitted:
                 raise
             log.warning("stream provider %s failed: %s", m, exc)
+            if exc.code in (NO_CREDITS, INVALID_KEY):
+                dead.add(provider)
     assert last is not None
     raise last

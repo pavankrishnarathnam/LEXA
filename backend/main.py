@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 import agents.tools  # noqa: F401  (register tools)
 from agents.registry import seed_builtin_agents
+from api.errors import CodedHTTPException
 from api.routes import (
     agents as agents_routes,
 )
@@ -28,7 +29,7 @@ from api.routes import (
     voice,
 )
 from core.config import settings
-from core.llm.types import ProviderNotConfigured
+from core.llm.types import INVALID_KEY, NO_CREDITS, ProviderError, ProviderNotConfigured
 from core.llm.usage import BudgetExceeded
 from core.logging import configure_logging, get_logger
 from database.session import SessionLocal
@@ -80,12 +81,24 @@ async def security_middleware(request: Request, call_next):
 
 @app.exception_handler(BudgetExceeded)
 async def budget_handler(_: Request, exc: BudgetExceeded) -> JSONResponse:
-    return JSONResponse({"detail": str(exc)}, status_code=402)
+    return JSONResponse({"detail": str(exc), "code": "budget"}, status_code=402)
 
 
 @app.exception_handler(ProviderNotConfigured)
 async def provider_handler(_: Request, exc: ProviderNotConfigured) -> JSONResponse:
-    return JSONResponse({"detail": str(exc)}, status_code=503)
+    return JSONResponse({"detail": str(exc), "code": "not_configured"}, status_code=503)
+
+
+@app.exception_handler(ProviderError)
+async def provider_error_handler(_: Request, exc: ProviderError) -> JSONResponse:
+    """An AI provider call failed inside a request: say what is wrong (empty balance, bad key) instead of a bare 500."""
+    status = 402 if exc.code == NO_CREDITS else 503 if exc.code == INVALID_KEY else 502
+    return JSONResponse({"detail": str(exc), "code": exc.code or "provider_error"}, status_code=status)
+
+
+@app.exception_handler(CodedHTTPException)
+async def coded_http_handler(_: Request, exc: CodedHTTPException) -> JSONResponse:
+    return JSONResponse({"detail": exc.detail, "code": exc.code}, status_code=exc.status_code, headers=exc.headers)
 
 
 for r in (auth, chat, documents, agents_routes, tasks, memory, integrations, automations, career, records, system, voice):

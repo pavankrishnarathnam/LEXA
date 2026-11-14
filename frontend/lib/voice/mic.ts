@@ -26,6 +26,8 @@ export interface Utterance {
 
 export interface MicHandlers {
   onUtterance: (u: Utterance) => void;
+  /** Live partial text (only the browser recognizer provides it). */
+  onInterim?: (text: string) => void;
   onLevel?: (level: number) => void;
   onSpeechStart?: () => void;
   onSpeechEnd?: () => void;

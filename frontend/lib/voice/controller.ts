@@ -25,10 +25,14 @@ export type Awaiting = { kind: "approval" | "confirm" | "choice"; prompt: string
 
 export interface VoiceSnapshot {
   active: boolean;
-  /** The microphone is open. False in "text-only" voice mode (no speech recognition available). */
+  /** Something is listening. False in "text-only" voice mode (no speech recognition available). */
   listening: boolean;
+  /** Who is turning speech into text right now: OpenAI (server), the browser's own recogniser (free), or nobody. */
+  recognition: "server" | "browser" | "none";
   phase: Phase;
   heard: string;
+  /** Live partial text while you are still speaking (browser recognition only). */
+  interim: string;
   said: string;
   error: string | null;
   notice: string | null;
@@ -67,9 +71,13 @@ export interface VoiceHost {
   ask(text: string, opts: { voice: boolean }): Promise<{ taskId: string; conversationId?: string } | null>;
 }
 
+export type Recognition = "server" | "browser" | "none";
+
 export interface VoiceConfig {
   speed: number;
   language: string;
+  /** auto: OpenAI when it works, otherwise the browser's own (free) recogniser. */
+  recognition: "auto" | "server" | "browser";
   patience: "quick" | "normal" | "patient";
   wakePhrase: boolean;
   cues: boolean;
@@ -81,6 +89,10 @@ export interface ControllerDeps {
   host: VoiceHost;
   speaker: SpeakerLike;
   createMic: (h: MicHandlers) => MicLike;
+  /** The browser's own speech recogniser (Chrome, Edge, Safari); null where there is none (Firefox). */
+  createRecognizer?: (h: MicHandlers & { onTranscript: (text: string, meta: { duringSpeech: boolean }) => void }) => MicLike | null;
+  /** OpenAI speech recognition is configured on the server (default true until the server says otherwise). */
+  serverStt?: () => boolean;
   config: () => VoiceConfig;
   setSpeed: (speed: number) => void;
   playCue: (c: Cue) => void;
@@ -107,6 +119,18 @@ const MIN_DURING_SPEECH_MS = 350;
 /** The microphone can still pick up LEXA's voice (reverb, echo-canceller lag) for a moment after it stops. */
 const ECHO_TAIL_MS = 800;
 
+/** Why server (OpenAI) recognition cannot be used, as a clause that reads well after "…, so I'm switching…". */
+const SERVER_DOWN_REASON: Record<string, string> = {
+  no_credits: "Your OpenAI account has no credits left",
+  not_configured: "Speech recognition isn't set up on the server (it needs an OpenAI API key)",
+  invalid_key: "OpenAI rejected the API key",
+  budget: "Your monthly AI budget is used up",
+};
+const SERVER_DOWN_KEY = "lexa.voice.server-down";
+const SERVER_DOWN_MS = 10 * 60_000;
+const NO_BROWSER_STT = "This browser has no built-in speech recognition (Chrome, Edge and Safari have it; Firefox does not)";
+const NO_CREDITS_HELP = "Add credits at platform.openai.com, or open LEXA in Chrome or Edge for free voice.";
+
 const MIC_MESSAGES: Record<string, string> = {
   denied: "Microphone access is blocked. Allow the microphone for this site in your browser's address bar, then turn voice on again.",
   "no-device": "No microphone was found. Plug one in, then turn voice on again.",
@@ -126,13 +150,16 @@ type WatchedTask = { startedAt: number; timers: ReturnType<typeof setTimeout>[];
 
 export class VoiceController {
   private snap: VoiceSnapshot = {
-    active: false, listening: false, phase: "off", heard: "", said: "", error: null, notice: null, awaiting: null,
-    micProblem: null, history: [],
+    active: false, listening: false, recognition: "none", phase: "off", heard: "", interim: "", said: "", error: null,
+    notice: null, awaiting: null, micProblem: null, history: [],
   };
   private level = 0;
   private listeners = new Set<() => void>();
   private levelListeners = new Set<() => void>();
   private mic: MicLike;
+  private serverMic: MicLike;
+  private browserMic: MicLike | null;
+  private serverDownCode: string | null = null;
 
   private active = false;
   private sleeping = false;
@@ -162,14 +189,18 @@ export class VoiceController {
   private lastConversation: string | null = null;
 
   constructor(private d: ControllerDeps) {
-    this.mic = d.createMic({
+    const common: MicHandlers = {
       onUtterance: (u) => this.onUtterance(u),
       onLevel: (l) => { this.level = l; this.levelListeners.forEach((f) => f()); },
       onSpeechStart: () => { this.hearing = true; this.recompute(); },
       onSpeechEnd: () => { this.hearing = false; this.recompute(); },
+      onInterim: (t) => { if (t !== this.snap.interim) this.patch({ interim: t }); },
       onError: (e) => { this.patch({ micProblem: MIC_MESSAGES[e.code] ?? e.message }); void this.stop("mic"); },
       isSpeaking: () => this.d.speaker.speaking || this.now() - this.lastLexaEnd < ECHO_TAIL_MS,
-    });
+    };
+    this.serverMic = d.createMic(common);
+    this.browserMic = d.createRecognizer?.({ ...common, onTranscript: (t, meta) => this.onBrowserTranscript(t, meta) }) ?? null;
+    this.mic = this.serverMic;
   }
 
   // -------------------------------------------------------------------------------------------------- store API
@@ -209,37 +240,97 @@ export class VoiceController {
 
   // ------------------------------------------------------------------------------------------------ lifecycle
 
+  // ---------------------------------------------------------------------------------- which engine listens
+
+  /** OpenAI recognition was found unusable a short while ago (no credits, bad key…): do not try it again at once. */
+  private serverDown(): string | null {
+    if (this.serverDownCode) return this.serverDownCode;
+    try {
+      const raw = sessionStorage.getItem(SERVER_DOWN_KEY);
+      if (!raw) return null;
+      const v = JSON.parse(raw) as { code: string; at: number };
+      if (this.now() - v.at < SERVER_DOWN_MS) return v.code;
+      sessionStorage.removeItem(SERVER_DOWN_KEY);
+    } catch { /* no storage */ }
+    return null;
+  }
+
+  private markServerDown(code: string): void {
+    this.serverDownCode = code;
+    try { sessionStorage.setItem(SERVER_DOWN_KEY, JSON.stringify({ code, at: this.now() })); } catch { /* no storage */ }
+  }
+
+  private serverUsable(): boolean { return (this.d.serverStt?.() ?? true) && !this.serverDown(); }
+
+  private chooseRecognition(): Recognition {
+    const pref = this.cfg().recognition;
+    const server = this.serverUsable();
+    const browser = this.browserMic !== null;
+    if (pref === "server") return server ? "server" : "none";
+    if (pref === "browser") return browser ? "browser" : "none";
+    return server ? "server" : browser ? "browser" : "none";
+  }
+
+  /** Why nothing can listen, in words that also say what to do about it. */
+  private whyNoRecognition(): string {
+    const pref = this.cfg().recognition;
+    const code = this.serverDown() ?? (this.d.serverStt?.() === false ? "not_configured" : null);
+    if (pref === "browser") return `${NO_BROWSER_STT}. Pick OpenAI recognition in Settings, Voice, or use Chrome or Edge.`;
+    const server = code ? SERVER_DOWN_REASON[code] ?? "OpenAI speech recognition isn't available" : "Speech recognition isn't available";
+    if (pref === "server") return `${server}. ${code === "no_credits" ? NO_CREDITS_HELP : "Check the server's OpenAI key."}`;
+    return `${server}, and ${NO_BROWSER_STT.charAt(0).toLowerCase()}${NO_BROWSER_STT.slice(1)}. ${code === "no_credits" ? NO_CREDITS_HELP : "Open LEXA in Chrome or Edge for free voice, or set up the OpenAI key."}`;
+  }
+
+  private async startListening(engine: Exclude<Recognition, "none">): Promise<{ ok: true } | { ok: false; error: unknown }> {
+    const mic = engine === "server" ? this.serverMic : this.browserMic!;
+    try {
+      mic.setEndSilence(PATIENCE_MS[this.cfg().patience]);
+      await mic.start();
+      this.mic = mic;
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  }
+
+  // ------------------------------------------------------------------------------------------------ lifecycle
+
   /** Must be called from a user gesture (button, hotkey) so the browser allows microphone and audio. */
   async start(opts: { quiet?: boolean; listen?: boolean } = {}): Promise<boolean> {
     if (this.active) return true;
     this.d.speaker.unlock();
-    const listen = opts.listen !== false;
     this.patch({ phase: "starting", error: null, micProblem: null });
-    try {
-      this.mic.setEndSilence(PATIENCE_MS[this.cfg().patience]);
-      if (listen) await this.mic.start();
-    } catch (e) {
-      const code = (e as { code?: string }).code ?? "failed";
-      this.patch({ phase: "off", micProblem: MIC_MESSAGES[code] ?? (e as Error).message });
-      this.cue("error");
-      void this.d.speaker.speak(MIC_MESSAGES[code] ?? "The microphone could not be started.");
-      return false;
+    const engine: Recognition = opts.listen === false ? "none" : this.chooseRecognition();
+    if (engine !== "none") {
+      const r = await this.startListening(engine);
+      if (!r.ok) {
+        const code = (r.error as { code?: string }).code ?? "failed";
+        this.patch({ phase: "off", micProblem: MIC_MESSAGES[code] ?? (r.error as Error).message });
+        this.cue("error");
+        void this.d.speaker.speak(MIC_MESSAGES[code] ?? "The microphone could not be started.");
+        return false;
+      }
     }
     this.active = true;
     this.sleeping = false;
     this.lastActivity = this.now();
-    this.patch({ active: true, listening: listen, error: null, notice: null });
+    this.patch({ active: true, listening: engine !== "none", recognition: engine, error: null, notice: null, interim: "" });
     this.recompute();
     this.cue("start");
     this.idleTimer = setInterval(() => this.checkIdle(), 15_000);
-    if (!opts.quiet) void this.intro();
+    if (engine === "none") {
+      const why = this.whyNoRecognition();
+      this.patch({ notice: `${why} You can type commands in the box below; I will still speak.` });
+      void this.say(`Voice mode is on, but I can't hear you. ${why} Type commands in the box below and I will answer out loud.`, { remember: false });
+    } else if (!opts.quiet) void this.intro();
     return true;
   }
 
   async stop(why: "user" | "mic" | "fatal" = "user"): Promise<void> {
     if (this.idleTimer) clearInterval(this.idleTimer);
     this.idleTimer = null;
-    this.mic.stop();
+    this.serverMic.stop();
+    this.browserMic?.stop();
     this.d.speaker.stop();
     this.active = false;
     this.sleeping = false;
@@ -252,7 +343,7 @@ export class VoiceController {
     this.clearTasks();
     if (this.autoReviewTimer) clearTimeout(this.autoReviewTimer);
     this.setAwaiting(null);
-    this.patch({ active: false, listening: false, phase: "off", ...(why === "user" ? { notice: "Voice mode is off." } : {}) });
+    this.patch({ active: false, listening: false, recognition: "none", interim: "", phase: "off", ...(why === "user" ? { notice: "Voice mode is off." } : {}) });
     if (why === "user") this.cue("sleep");
   }
 
@@ -361,27 +452,36 @@ export class VoiceController {
       this.pendingStt--;
       this.recompute();
     }
+    await this.afterTranscript(text, { duringSpeech: u.duringSpeech, durationMs: u.durationMs });
+  }
+
+  /** The browser's recogniser delivered a finished sentence (no upload, no cost). */
+  private onBrowserTranscript(text: string, meta: { duringSpeech: boolean }): void {
+    void this.afterTranscript(text.trim(), { duringSpeech: meta.duringSpeech, durationMs: 1500 });
+  }
+
+  /** Common to both engines: drop noise and LEXA's own voice, then treat it as something the user said. */
+  private async afterTranscript(text: string, o: { duringSpeech: boolean; durationMs: number }): Promise<void> {
     if (!text || !this.active) return;
-    if (isLikelyHallucination(text, u.durationMs)) return;
+    if (isLikelyHallucination(text, o.durationMs)) return;
     // Echo can only exist while LEXA is audible. Someone repeating a suggestion ("say review approvals") after LEXA
     // has finished is not an echo.
-    if (u.duringSpeech) {
+    if (o.duringSpeech) {
       const recent = this.d.speaker.recent();
       if (recent && isEcho(text, recent)) return;
     }
-    await this.hear(text, { duringSpeech: u.duringSpeech });
+    await this.hear(text, { duringSpeech: o.duringSpeech });
   }
 
   private onSttError(e: unknown): void {
     const status = (e as { status?: number })?.status;
+    const code = (e as { code?: string })?.code ?? (status === 503 ? "not_configured" : undefined);
     const msg = (e as Error)?.message || "";
-    if (status === 503 || status === 402) {
-      const why = status === 503
-        ? "Speech recognition isn't set up on the server. It needs an OpenAI API key."
-        : "Your monthly AI budget has been reached, so I can't transcribe speech.";
-      this.patch({ error: why });
-      this.cue("error");
-      void this.say(why).then(() => this.stop("fatal"));
+    if (code && SERVER_DOWN_REASON[code]) {
+      // OpenAI cannot transcribe for this account right now. Retrying is pointless: use the browser's recogniser if
+      // there is one (and allowed), otherwise carry on in text-only mode and say exactly why.
+      this.markServerDown(code);
+      void this.fallBackFromServer(code);
       return;
     }
     if (status === 429) { this.patch({ notice: "Too much speech at once. Pausing for a moment." }); return; }
@@ -391,6 +491,27 @@ export class VoiceController {
       this.patch({ error: `I couldn't hear that${msg ? `: ${short(msg, 120)}` : ""}.` });
     }
   }
+
+  private async fallBackFromServer(code: string): Promise<void> {
+    if (this.recognition() !== "server") return; // already handled by an earlier failing sentence
+    this.serverMic.stop();
+    this.queue = [];
+    this.cue("error");
+    if (this.cfg().recognition === "auto" && this.browserMic) {
+      const r = await this.startListening("browser");
+      if (r.ok) {
+        this.patch({ recognition: "browser", listening: true, error: null, notice: "Using your browser's free speech recognition." });
+        void this.say(`${SERVER_DOWN_REASON[code]}, so I'm switching to your browser's free speech recognition. Please say that again.`, { remember: false });
+        return;
+      }
+    }
+    this.patch({ recognition: "none", listening: false, interim: "" });
+    const why = this.whyNoRecognition();
+    this.patch({ error: why, notice: "Voice is now text-only: type commands in the box below." });
+    void this.say(`${why} You can keep typing commands in the box below.`, { remember: false });
+  }
+
+  private recognition(): Recognition { return this.snap.recognition; }
 
   // ----------------------------------------------------------------------------------------------- speaking
 

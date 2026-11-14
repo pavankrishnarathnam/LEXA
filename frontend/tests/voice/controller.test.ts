@@ -37,6 +37,18 @@ class FakeMic implements MicLike {
   ignoreFor(): void {}
 }
 
+/** Stands in for the browser's own speech recogniser (Chrome / Edge / Safari). */
+class FakeRecognizer implements MicLike {
+  running = false;
+  failWith: unknown = null;
+  handlers!: MicHandlers & { onTranscript: (text: string, meta: { duringSpeech: boolean }) => void };
+  async start(): Promise<void> { if (this.failWith) throw this.failWith; this.running = true; }
+  stop(): void { this.running = false; }
+  setEndSilence(): void {}
+  ignoreFor(): void {}
+  say(text: string, duringSpeech = false): void { this.handlers.onTranscript(text, { duringSpeech }); }
+}
+
 const approval = (over: Partial<Approval> = {}): Approval => ({
   id: "a1", task_id: "t1", agent: "communication", tool: "gmail_send", risk_level: "medium", reason: "external action",
   summary: "Email to alex@example.com — “Project update”\n\nHi Alex, the project is on track for Friday.",
@@ -48,11 +60,13 @@ const dashboard = (over: Partial<DashboardLite> = {}): DashboardLite => ({
   usage: { month_spend_usd: 1, budget_usd: 50 }, ...over,
 });
 
-function setup(opts: { approvals?: Approval[]; config?: Partial<VoiceConfig>; pathname?: string; openHelp?: () => void } = {}) {
+function setup(opts: { approvals?: Approval[]; config?: Partial<VoiceConfig>; pathname?: string; openHelp?: () => void;
+  /** The browser has its own speech recogniser (default: no, like Firefox). */ browserStt?: boolean; serverStt?: boolean } = {}) {
   const speaker = new FakeSpeaker();
   const mic = new FakeMic();
+  const recognizer = new FakeRecognizer();
   const cues: string[] = [];
-  const config: VoiceConfig = { speed: 1, language: "en", patience: "normal", wakePhrase: false, cues: true, speakResponses: false, ...opts.config };
+  const config: VoiceConfig = { speed: 1, language: "en", recognition: "auto", patience: "normal", wakePhrase: false, cues: true, speakResponses: false, ...opts.config };
   const state = { approvals: opts.approvals ?? [], dash: dashboard(), tasks: {} as Record<string, TaskLite>, path: opts.pathname ?? "/" };
   const api: VoiceApi = {
     transcribe: vi.fn(async () => ({ text: "" })),
@@ -73,9 +87,11 @@ function setup(opts: { approvals?: Approval[]; config?: Partial<VoiceConfig>; pa
   const deps: ControllerDeps = {
     api, host, speaker, config: () => config, setSpeed, playCue: (c) => { cues.push(c); },
     createMic: (h) => { mic.handlers = h; return mic; }, openHelp: opts.openHelp,
+    createRecognizer: opts.browserStt ? (h) => { recognizer.handlers = h; return recognizer; } : undefined,
+    serverStt: () => opts.serverStt !== false,
   };
   const c = new VoiceController(deps);
-  return { c, speaker, mic, api, host, cues, config, state, setSpeed };
+  return { c, speaker, mic, recognizer, api, host, cues, config, state, setSpeed };
 }
 type Ctx = ReturnType<typeof setup>;
 const flush = () => vi.advanceTimersByTimeAsync(0);
@@ -86,7 +102,7 @@ async function reading(t: Ctx) { // start a review and let the narration finish
   await flush();
 }
 
-beforeEach(() => { vi.useFakeTimers(); document.body.innerHTML = ""; localStorage.clear(); });
+beforeEach(() => { vi.useFakeTimers(); document.body.innerHTML = ""; localStorage.clear(); sessionStorage.clear(); });
 afterEach(() => { vi.useRealTimers(); });
 
 describe("starting and stopping", () => {
@@ -329,16 +345,18 @@ describe("hearing", () => {
     expect(t.api.transcribe).not.toHaveBeenCalled();
   });
 
-  it("speaks a clear message and switches voice off when speech recognition is not configured", async () => {
+  it("keeps working as text-only (and says why) when the server has no speech recognition and the browser has none", async () => {
     const t = setup();
-    (t.api.transcribe as ReturnType<typeof vi.fn>).mockRejectedValueOnce(Object.assign(new Error("x"), { status: 503 }));
+    (t.api.transcribe as ReturnType<typeof vi.fn>).mockRejectedValueOnce(Object.assign(new Error("x"), { status: 503, code: "not_configured" }));
     await t.c.start({ quiet: true });
     utter(t);
     await vi.advanceTimersByTimeAsync(10);
-    expect(t.speaker.last).toMatch(/needs an OpenAI API key/);
-    t.speaker.finish();
-    await flush();
-    expect(t.c.getSnapshot().active).toBe(false);
+    expect(t.speaker.last).toMatch(/isn't set up on the server/);
+    expect(t.speaker.last).toMatch(/Firefox does not/);
+    expect(t.c.getSnapshot()).toMatchObject({ active: true, listening: false, recognition: "none" });
+    expect(t.mic.running).toBe(false);
+    await say(t, "go to tasks", { typed: true }); // typed commands keep working
+    expect(t.host.navigate).toHaveBeenCalledWith("/tasks");
   });
 
   it("sleeps on command and only wakes for 'Hey LEXA'", async () => {
@@ -369,6 +387,140 @@ describe("hearing", () => {
     expect(t.host.navigate).not.toHaveBeenCalled();
     await say(t, "Hey LEXA open tasks");
     expect(t.host.navigate).toHaveBeenCalledWith("/tasks");
+  });
+});
+
+describe("who listens: OpenAI, the browser's free recogniser, or nobody", () => {
+  const utter = (t: Ctx) => t.mic.handlers.onUtterance({ wav: new Uint8Array(100), durationMs: 1500, speechMs: 1200, duringSpeech: false });
+  const noCredits = () => Object.assign(new Error("OpenAI says this account has no credits left"), { status: 402, code: "no_credits" });
+
+  it("uses OpenAI when it works and leaves the browser recogniser alone", async () => {
+    const t = setup({ browserStt: true });
+    await t.c.start({ quiet: true });
+    expect(t.c.getSnapshot()).toMatchObject({ listening: true, recognition: "server" });
+    expect(t.mic.running).toBe(true);
+    expect(t.recognizer.running).toBe(false);
+  });
+
+  it("starts straight on the browser recogniser when the server has no OpenAI key", async () => {
+    const t = setup({ browserStt: true, serverStt: false });
+    await t.c.start({ quiet: true });
+    expect(t.c.getSnapshot()).toMatchObject({ listening: true, recognition: "browser" });
+    expect(t.mic.running).toBe(false);
+    t.recognizer.say("Go to tasks.");
+    await vi.advanceTimersByTimeAsync(10);
+    expect(t.host.navigate).toHaveBeenCalledWith("/tasks");
+    expect(t.api.transcribe).not.toHaveBeenCalled(); // nothing was uploaded
+  });
+
+  it("switches to the browser recogniser the moment OpenAI reports no credits, and says so", async () => {
+    const t = setup({ browserStt: true });
+    (t.api.transcribe as ReturnType<typeof vi.fn>).mockRejectedValueOnce(noCredits());
+    await t.c.start({ quiet: true });
+    utter(t);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(t.speaker.last).toMatch(/Your OpenAI account has no credits left, so I'm switching to your browser's free speech recognition/);
+    expect(t.c.getSnapshot()).toMatchObject({ listening: true, recognition: "browser", active: true });
+    expect(t.mic.running).toBe(false);
+    expect(t.recognizer.running).toBe(true);
+    t.recognizer.say("open settings");
+    await vi.advanceTimersByTimeAsync(10);
+    expect(t.host.navigate).toHaveBeenCalledWith("/settings");
+  });
+
+  it("remembers the empty balance for a while so the next voice session starts on the browser recogniser", async () => {
+    const t = setup({ browserStt: true });
+    (t.api.transcribe as ReturnType<typeof vi.fn>).mockRejectedValueOnce(noCredits());
+    await t.c.start({ quiet: true });
+    utter(t);
+    await vi.advanceTimersByTimeAsync(10);
+    await t.c.stop();
+    const again = setup({ browserStt: true }); // a fresh page in the same browser tab
+    await again.c.start({ quiet: true });
+    expect(again.c.getSnapshot().recognition).toBe("browser");
+    expect(again.api.transcribe).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(11 * 60_000); // ... but not forever: the user may have added credits
+    const later = setup({ browserStt: true });
+    await later.c.start({ quiet: true });
+    expect(later.c.getSnapshot().recognition).toBe("server");
+  });
+
+  it("without a browser recogniser (Firefox) and with no credits: text-only, with advice that names the way out", async () => {
+    const t = setup();
+    (t.api.transcribe as ReturnType<typeof vi.fn>).mockRejectedValueOnce(noCredits());
+    await t.c.start({ quiet: true });
+    utter(t);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(t.speaker.last).toMatch(/no credits left/);
+    expect(t.speaker.last).toMatch(/Firefox does not/);
+    expect(t.speaker.last).toMatch(/platform\.openai\.com/);
+    expect(t.speaker.last).toMatch(/Chrome or Edge/);
+    expect(t.c.getSnapshot()).toMatchObject({ active: true, listening: false, recognition: "none" });
+    expect(t.c.getSnapshot().error).toMatch(/no credits left/);
+    // a second failing sentence must not repeat the speech
+    const spoken = t.speaker.spoken.length;
+    utter(t);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(t.speaker.spoken.length).toBe(spoken);
+  });
+
+  it("never sends your voice to the browser vendor when you chose OpenAI only", async () => {
+    const t = setup({ browserStt: true, config: { recognition: "server" } });
+    (t.api.transcribe as ReturnType<typeof vi.fn>).mockRejectedValueOnce(noCredits());
+    await t.c.start({ quiet: true });
+    utter(t);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(t.recognizer.running).toBe(false);
+    expect(t.c.getSnapshot().recognition).toBe("none");
+  });
+
+  it("honours a choice of the browser recogniser, and explains when there is none", async () => {
+    const t = setup({ browserStt: true, config: { recognition: "browser" } });
+    await t.c.start({ quiet: true });
+    expect(t.c.getSnapshot().recognition).toBe("browser");
+    expect(t.mic.running).toBe(false);
+    const none = setup({ config: { recognition: "browser" } });
+    await none.c.start({ quiet: true });
+    expect(none.c.getSnapshot()).toMatchObject({ recognition: "none", listening: false });
+    expect(none.speaker.last).toMatch(/no built-in speech recognition/);
+  });
+
+  it("also switches when the monthly AI budget is used up (the browser's recogniser costs nothing)", async () => {
+    const t = setup({ browserStt: true });
+    (t.api.transcribe as ReturnType<typeof vi.fn>).mockRejectedValueOnce(Object.assign(new Error("budget"), { status: 402, code: "budget" }));
+    await t.c.start({ quiet: true });
+    utter(t);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(t.speaker.last).toMatch(/monthly AI budget is used up, so I'm switching/);
+    expect(t.c.getSnapshot().recognition).toBe("browser");
+  });
+
+  it("shows the problem (and does not start) when the browser's recogniser is blocked", async () => {
+    const t = setup({ browserStt: true, serverStt: false });
+    t.recognizer.failWith = Object.assign(new Error("blocked"), { code: "denied" });
+    expect(await t.c.start({ quiet: true })).toBe(false);
+    expect(t.c.getSnapshot()).toMatchObject({ active: false, phase: "off" });
+    expect(t.c.getSnapshot().micProblem).toMatch(/Allow the microphone/);
+  });
+
+  it("treats browser transcripts like spoken ones: LEXA's own voice is dropped and nothing can be approved over it", async () => {
+    const t = setup({ browserStt: true, serverStt: false, approvals: [approval()] });
+    await t.c.start({ quiet: true });
+    void t.speaker.speak("Say approve, reject, or skip.");
+    t.recognizer.say("say approve reject or skip", true); // its own voice, heard through the speakers
+    t.recognizer.say("approve", true);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(t.api.decide).not.toHaveBeenCalled();
+    expect(t.host.ask).not.toHaveBeenCalled();
+  });
+
+  it("shows what you are saying while you are still saying it", async () => {
+    const t = setup({ browserStt: true, serverStt: false });
+    await t.c.start({ quiet: true });
+    t.recognizer.handlers.onInterim?.("open the sett");
+    expect(t.c.getSnapshot().interim).toBe("open the sett");
+    t.recognizer.handlers.onInterim?.("");
+    expect(t.c.getSnapshot().interim).toBe("");
   });
 });
 

@@ -66,6 +66,10 @@ export default function CommandCenter() {
   const orbState = phase === "speaking" ? "speaking" : phase === "hearing" ? "listening" : phase === "transcribing" ? "processing"
     : phase === "thinking" || data?.active_tasks.length ? "thinking" : "idle";
   const budgetPct = data ? Math.min(100, (data.usage.month_spend_usd / Math.max(data.usage.budget_usd, 0.0001)) * 100) : 0;
+  // The newest task failed because the OpenAI balance is empty: say so up front instead of leaving a mystery.
+  // (It disappears by itself once a later task succeeds.)
+  const newest = data?.recent_tasks[0];
+  const noCredits = newest?.status === "FAILED" && /no credits left/i.test(newest.error ?? "");
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -93,6 +97,16 @@ export default function CommandCenter() {
             </form>
           </div>
         </div>
+        {noCredits && (
+          <div role="alert" className="mt-6 flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-foreground">
+            <Plug className="mt-0.5 size-3.5 shrink-0 text-danger" />
+            <p className="min-w-0 break-words">
+              OpenAI says this account has no credits left, so agents can&apos;t answer right now. The API is billed separately from a ChatGPT subscription:{" "}
+              <a className="font-medium underline" href="https://platform.openai.com/settings/organization/billing" target="_blank" rel="noopener noreferrer">add credits in OpenAI billing</a>,
+              then try again. Voice commands that only move around LEXA keep working, and Chrome or Edge can recognise speech for free.
+            </p>
+          </div>
+        )}
         {data && !data.providers.anthropic && !data.providers.openai && (
           <div className="mt-6 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
             <Plug className="mt-0.5 size-3.5 shrink-0" />

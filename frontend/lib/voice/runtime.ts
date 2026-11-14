@@ -5,6 +5,7 @@
 import type { Approval } from "@/types";
 import { api, post, runInstruction } from "@/services/api";
 import { playCue, cueDuration } from "./earcons";
+import { BrowserRecognizer, browserRecognitionSupported } from "./browser-stt";
 import { Mic } from "./mic";
 import { Speaker } from "./speaker";
 import {
@@ -28,7 +29,7 @@ export interface VoicePrefs extends VoiceConfig {
 }
 
 export const DEFAULT_PREFS: VoicePrefs = {
-  speed: 1, language: "", patience: "normal", wakePhrase: false, cues: true, speakResponses: false,
+  speed: 1, language: "", recognition: "auto", patience: "normal", wakePhrase: false, cues: true, speakResponses: false,
   engine: "server", voice: "nova", autoStart: false,
 };
 
@@ -58,6 +59,7 @@ export function prefsFromSettings(s: Record<string, unknown> | undefined): Voice
   const patience = v.voice_patience === "quick" || v.voice_patience === "patient" ? v.voice_patience : "normal";
   return {
     speed, patience, language: typeof v.voice_language === "string" ? v.voice_language : "",
+    recognition: v.voice_recognition === "server" || v.voice_recognition === "browser" ? v.voice_recognition : "auto",
     wakePhrase: v.voice_wake_phrase === true, cues: v.voice_cues !== false, speakResponses: v.speak_responses === true,
     engine: v.voice_engine === "browser" ? "browser" : "server", voice: typeof v.voice === "string" && v.voice ? v.voice : "nova",
     autoStart: v.voice_auto_start === true,
@@ -106,7 +108,9 @@ export function getVoice(): VoiceController {
     language: () => bound.prefs.language,
     onStart: () => instance?.onSpeakStart(),
     onEnd: () => instance?.onSpeakEnd(),
-    onFallback: (why) => instance?.setNotice(`Using your browser's voice (${why}).`),
+    onFallback: (why, code) => instance?.setNotice(code === "no_credits"
+      ? "OpenAI's voice is unavailable (the account has no credits), so I'm using your browser's voice."
+      : `Using your browser's voice (${why}).`),
     onBlocked: () => instance?.setNotice("Your browser blocked sound. Press any key or click once to allow it."),
   });
   speakerInstance = speaker;
@@ -115,6 +119,9 @@ export function getVoice(): VoiceController {
     host: realHost,
     speaker,
     createMic: (handlers) => new Mic(handlers),
+    createRecognizer: (handlers) => (browserRecognitionSupported()
+      ? new BrowserRecognizer({ ...handlers, language: () => bound.prefs.language }) : null),
+    serverStt: () => bound.caps?.server_stt !== false,
     config: () => bound.prefs,
     setSpeed: (speed) => {
       bound.prefs = { ...bound.prefs, speed };
@@ -137,6 +144,6 @@ export function getCaps(): VoiceCaps | null {
 
 /** What server-side rendering shows before the controller exists. */
 export const SERVER_SNAPSHOT: VoiceSnapshot = {
-  active: false, listening: false, phase: "off", heard: "", said: "", error: null, notice: null, awaiting: null,
-  micProblem: null, history: [],
+  active: false, listening: false, recognition: "none", phase: "off", heard: "", interim: "", said: "", error: null,
+  notice: null, awaiting: null, micProblem: null, history: [],
 };

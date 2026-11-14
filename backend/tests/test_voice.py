@@ -176,12 +176,13 @@ async def test_capabilities(client, monkeypatch):
 async def test_voice_settings_are_validated(client):
     ok = await client.patch("/api/auth/me/settings", json={
         "voice_speed": 1.25, "voice_patience": "patient", "voice_language": "", "voice_auto_start": True,
-        "voice_wake_phrase": False, "voice_cues": True, "voice_engine": "browser"})
+        "voice_wake_phrase": False, "voice_cues": True, "voice_engine": "browser", "voice_recognition": "auto"})
     assert ok.status_code == 200
     s = ok.json()["settings"]
     assert s["voice_speed"] == 1.25 and s["voice_patience"] == "patient" and s["voice_language"] == ""
+    assert s["voice_recognition"] == "auto"
     for bad in ({"voice_speed": 3.0}, {"voice_patience": "instant"}, {"voice_language": "english"},
-                {"voice_engine": "cloud"}):
+                {"voice_engine": "cloud"}, {"voice_recognition": "cloud"}):
         assert (await client.patch("/api/auth/me/settings", json=bad)).status_code == 422, bad
 
 

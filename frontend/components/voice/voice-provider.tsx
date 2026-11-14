@@ -29,9 +29,6 @@ export interface VoiceCtx {
 export const VoiceContext = createContext<VoiceCtx | null>(null);
 const Ctx = VoiceContext;
 
-const TEXT_ONLY_NOTICE =
-  "Speech recognition isn't set up on the server yet (it needs OPENAI_API_KEY), so I can't hear you. Type commands in the box below; I will still speak.";
-
 /** Voice for the whole signed-in app: owns the microphone, speech, hotkeys and the voice bar. */
 export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const { user, setUser } = useAuth();
@@ -65,11 +62,11 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [userId]);
 
+  // The controller picks the engine: OpenAI, else the browser's own recogniser, else text-only (and says why).
   const toggle = useCallback(() => {
-    if (controller.getSnapshot().active) { void controller.stop(); return; }
-    const listen = caps ? caps.server_stt : true;
-    void controller.start({ listen }).then((ok) => { if (ok && !listen) controller.setNotice(TEXT_ONLY_NOTICE); });
-  }, [controller, caps]);
+    if (controller.getSnapshot().active) void controller.stop();
+    else void controller.start();
+  }, [controller]);
 
   // Stable identities: consumers use these in effect dependencies, and the snapshot changes many times a second.
   const stopSpeaking = useCallback(() => controller.stopSpeaking(), [controller]);

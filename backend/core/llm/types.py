@@ -65,12 +65,18 @@ class NeutralTurn:
     tool_results: list[tuple[str, str, bool]] = field(default_factory=list)  # (tool_call_id, content, is_error)
 
 
+NO_CREDITS = "no_credits"  # the provider account has no balance / quota left: retrying cannot help
+INVALID_KEY = "invalid_key"  # the API key was rejected
+
+
 class ProviderError(Exception):
-    def __init__(self, message: str, *, retryable: bool = False, provider: str = "", status: int | None = None):
+    def __init__(self, message: str, *, retryable: bool = False, provider: str = "", status: int | None = None,
+                 code: str | None = None):
         super().__init__(message)
         self.retryable = retryable
         self.provider = provider
         self.status = status
+        self.code = code
 
 
 class ProviderNotConfigured(ProviderError):

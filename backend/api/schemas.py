@@ -49,7 +49,8 @@ class SettingsIn(BaseModel):
     voice_auto_start: bool | None = None
     voice_wake_phrase: bool | None = None
     voice_cues: bool | None = None
-    voice_engine: Literal["server", "browser"] | None = None
+    voice_engine: Literal["server", "browser"] | None = None  # who SPEAKS: OpenAI voice or the browser voice (free)
+    voice_recognition: Literal["auto", "server", "browser"] | None = None  # who LISTENS: OpenAI, the browser (free) or auto
 
 
 class MessageIn(BaseModel):

@@ -1,6 +1,7 @@
 /** Same-origin API client: httpOnly cookie session + double-submit CSRF header + transparent refresh. */
 export class ApiError extends Error {
-  constructor(public status: number, message: string, public body?: unknown) {
+  /** `code` is the server's short machine-readable reason (e.g. "no_credits", "not_configured", "budget"). */
+  constructor(public status: number, message: string, public body?: unknown, public code?: string) {
     super(message);
   }
 }
@@ -39,16 +40,18 @@ export async function api<T = unknown>(path: string, init: RequestInit & { json?
   }
   if (!res.ok) {
     let detail: unknown = res.statusText;
+    let code: string | undefined;
     try {
       const j = await res.json();
       detail = j.detail ?? j;
+      if (typeof j.code === "string") code = j.code;
     } catch {
       /* not json */
     }
     const msg = typeof detail === "string" ? detail : Array.isArray(detail)
       ? detail.map((d: { msg?: string }) => d.msg).join("; ")
       : JSON.stringify(detail);
-    throw new ApiError(res.status, msg, detail);
+    throw new ApiError(res.status, msg, detail, code);
   }
   if (res.status === 204) return undefined as T;
   const ct = res.headers.get("content-type") || "";

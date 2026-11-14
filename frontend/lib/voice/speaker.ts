@@ -28,7 +28,7 @@ export interface SpeakerOptions {
   language: () => string;
   onStart?: () => void;
   onEnd?: (reason: SpeakEnd) => void;
-  onFallback?: (why: string) => void;
+  onFallback?: (why: string, code?: string) => void;
   onBlocked?: () => void;
 }
 
@@ -158,7 +158,7 @@ export class Speaker implements SpeakerLike {
         p = this.o.synth(chunks[i], voice, signal).catch((e: unknown) => {
           if (signal.aborted) return null;
           this.serverDownUntil = Date.now() + SERVER_BACKOFF_MS;
-          this.o.onFallback?.((e as Error)?.message || "server voice unavailable");
+          this.o.onFallback?.((e as Error)?.message || "server voice unavailable", (e as { code?: string })?.code);
           return null;
         });
         fetched.set(i, p);
