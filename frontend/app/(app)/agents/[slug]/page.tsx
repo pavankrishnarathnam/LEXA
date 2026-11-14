@@ -13,15 +13,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentForm } from "@/components/agents/agent-form";
 import { AgentIcon } from "@/components/layout/agent-icon";
+import { useConfirm } from "@/components/voice/confirm-provider";
 import type { Agent, Execution } from "@/types";
 
 export default function AgentDetail({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const router = useRouter();
+  const { confirm } = useConfirm();
   const { data } = useApi<Agent & { executions: (Execution & { task_id?: string })[]; prompt_versions: { version: number; active: boolean; created_at: string }[] }>(`/api/agents/${slug}`);
   if (!data) return <div className="mx-auto max-w-6xl space-y-3"><Skeleton className="h-10 w-72" /><Skeleton className="h-96" /></div>;
   const remove = async () => {
-    if (!confirm(data.is_custom ? `Delete ${data.name}?` : `Reset ${data.name} to its default configuration?`)) return;
+    const ok = await confirm({ title: data.is_custom ? `Delete ${data.name}?` : `Reset ${data.name}?`,
+      description: data.is_custom ? "This agent and its history settings will be removed." : "Its prompt, tools and limits go back to the built-in defaults.",
+      confirmLabel: data.is_custom ? "Delete agent" : "Reset to default", destructive: true });
+    if (!ok) return;
     try { await del(`/api/agents/${slug}`); toast.success(data.is_custom ? "Agent deleted" : "Reset to defaults"); router.push("/agents"); }
     catch (e) { toast.error((e as Error).message); }
   };
@@ -29,7 +34,7 @@ export default function AgentDetail({ params }: { params: Promise<{ slug: string
     <div className="mx-auto max-w-6xl">
       <Link href="/agents" className="mb-3 inline-flex items-center gap-1 text-xs text-muted hover:text-foreground"><ArrowLeft className="size-3" />Agents</Link>
       <PageHeader title={data.name} description={data.role} icon={() => <AgentIcon name={data.icon} className="size-5 text-primary" />}
-        actions={(data.is_custom || data.id) && <Button variant="secondary" size="sm" onClick={() => void remove()}>
+        actions={(data.is_custom || data.id) && <Button variant="secondary" size="sm" data-voice-confirms onClick={() => void remove()}>
           {data.is_custom ? <><Trash2 />Delete</> : <><RotateCcw />Reset to default</>}</Button>} />
       <Tabs defaultValue="config">
         <TabsList><TabsTrigger value="config">Configuration</TabsTrigger><TabsTrigger value="history">Execution history ({data.executions.length})</TabsTrigger></TabsList>

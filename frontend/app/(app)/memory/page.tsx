@@ -3,6 +3,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Brain, Download, Pin, PinOff, Plus, Search, Trash2 } from "lucide-react";
 import { useApi } from "@/hooks/use-api";
+import { useConfirm } from "@/components/voice/confirm-provider";
 import { api, del, post } from "@/services/api";
 import { cn, timeAgo } from "@/lib/utils";
 import { EmptyState, PageHeader } from "@/components/ui/misc";
@@ -55,6 +56,7 @@ function ProfileCard() {
 }
 
 export default function MemoryPage() {
+  const { prompt } = useConfirm();
   const [cat, setCat] = useState("");
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
@@ -78,8 +80,10 @@ export default function MemoryPage() {
     try { await api(`/api/memory/${m.id}`, { method: "PATCH", json: body }); setEditing(null); void reload(); } catch (e) { toast.error((e as Error).message); }
   };
   const retention = async () => {
-    const days = Number(prompt("Delete unpinned memories not updated in how many days?", "365"));
-    if (!days) return;
+    const answer = await prompt({ title: "Delete old memories", label: "Delete unpinned memories not updated in how many days?",
+      description: "Pinned memories are always kept.", defaultValue: "365", type: "number", confirmLabel: "Delete", destructive: true });
+    const days = Number(answer);
+    if (!answer || !days) return;
     const r = await post<{ deleted: number }>("/api/memory/retention", { older_than_days: days });
     toast.success(`Deleted ${r.deleted} memories`); void reload();
   };
@@ -89,7 +93,7 @@ export default function MemoryPage() {
       <PageHeader icon={Brain} title="Memory Center" description="What LEXA knows about you. Everything is editable, deletable and exportable. Secrets are never stored."
         actions={<>
           <Button variant="secondary" asChild><a href="/api/export"><Download />Export all data</a></Button>
-          <Button variant="ghost" onClick={() => void retention()}>Retention…</Button>
+          <Button variant="ghost" data-voice-confirms onClick={() => void retention()}>Retention…</Button>
           <Dialog open={adding} onOpenChange={setAdding}><DialogTrigger asChild><Button variant="gradient"><Plus />Add memory</Button></DialogTrigger>
             <DialogContent title="Teach LEXA something"><form onSubmit={add} className="grid gap-3">
               <Field label="Fact"><Textarea name="content" required rows={3} placeholder="I prefer meetings after 11am" /></Field>

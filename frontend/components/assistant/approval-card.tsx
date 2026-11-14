@@ -26,7 +26,8 @@ export function ApprovalCard({ approval, onDecided }: { approval: Approval; onDe
   const pending = approval.status === "pending";
   const tone = approval.risk_level === "high" ? "danger" : approval.risk_level === "medium" ? "warning" : "neutral";
   return (
-    <div className="rounded-xl border border-warning/30 bg-warning/[0.04] p-3.5">
+    <div data-approval-id={approval.id} role="group" aria-label={`Approval: ${approval.agent} wants to run ${approval.tool}`}
+      className="rounded-xl border border-warning/30 bg-warning/[0.04] p-3.5">
       <div className="flex items-start gap-3">
         <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" />
         <div className="min-w-0 flex-1">

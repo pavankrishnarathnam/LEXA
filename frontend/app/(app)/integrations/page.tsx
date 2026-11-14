@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { toast } from "sonner";
 import { ExternalLink, History, Plug, ShieldCheck, Unplug } from "lucide-react";
 import { useApi } from "@/hooks/use-api";
+import { useConfirm } from "@/components/voice/confirm-provider";
 import { del, post } from "@/services/api";
 import { timeAgo } from "@/lib/utils";
 import { PageHeader, Skeleton } from "@/components/ui/misc";
@@ -51,6 +52,7 @@ function Logs({ integ, onClose }: { integ: Integration; onClose: () => void }) {
 
 function IntegrationsInner() {
   const { data, loading, reload } = useApi<Integration[]>("/api/integrations");
+  const { confirm } = useConfirm();
   const params = useSearchParams();
   const [connecting, setConnecting] = useState<Integration | null>(null);
   const [logs, setLogs] = useState<Integration | null>(null);
@@ -70,7 +72,9 @@ function IntegrationsInner() {
     (r.ok ? toast.success : toast.error)(`${i.name}: ${r.ok ? "reachable" : r.message}`);
   };
   const disconnect = async (i: Integration) => {
-    if (!confirm(`Disconnect ${i.name}? Stored tokens are deleted${i.auth_type === "oauth2" ? " and revoked where supported" : ""}.`)) return;
+    const ok = await confirm({ title: `Disconnect ${i.name}?`, confirmLabel: "Disconnect", destructive: true,
+      description: `Stored tokens are deleted${i.auth_type === "oauth2" ? " and revoked where supported" : ""}.` });
+    if (!ok) return;
     try { await del(`/api/integrations/${i.key}`); toast.success("Disconnected"); void reload(); } catch (e) { toast.error((e as Error).message); }
   };
   const groups = Object.entries((data || []).reduce<Record<string, Integration[]>>((g, i) => ((g[i.category] ||= []).push(i), g), {}));
@@ -97,7 +101,7 @@ function IntegrationsInner() {
                   <p className="mt-2 text-[11px] text-warning">OAuth client not configured on the server{i.fields.length ? " — you can use a token instead." : "."}</p>)}
                 <div className="mt-auto flex gap-2 pt-3">
                   {i.auth_type === "config" ? <Button size="sm" variant="secondary" onClick={() => void check(i)}>Check connection</Button>
-                    : connected ? <><Button size="sm" variant="secondary" onClick={() => void disconnect(i)}><Unplug />Disconnect</Button>
+                    : connected ? <><Button size="sm" variant="secondary" data-voice-confirms aria-label={`Disconnect ${i.name}`} onClick={() => void disconnect(i)}><Unplug />Disconnect</Button>
                       <Button size="sm" variant="ghost" onClick={() => setLogs(i)}><History />Access log</Button></>
                     : <Button size="sm" variant="gradient" onClick={() => void connect(i)}><Plug />Connect</Button>}
                 </div>

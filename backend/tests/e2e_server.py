@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 
 os.environ.setdefault("DEFAULT_MODEL", "test-model")
 os.environ.setdefault("FALLBACK_MODEL", "test-fallback")
@@ -20,6 +21,12 @@ from tests.scripted_provider import STATE, ScriptedSession, plan_json, resp, scr
 register_provider("scripted", "test-", ScriptedSession, scripted_stream)
 
 
+# "Set up a <name> every Friday" becomes an automation called <name>. LEXA refuses to run an identical external action
+# twice ("duplicate prevented"), so tests that need a fresh approval simply ask for a differently named automation.
+_AUTOMATION_REQUEST = re.compile(r"set up an? (?P<name>[a-z0-9][a-z0-9 ]{2,40}?) every friday", re.I)
+_AUTOMATION_STEP = re.compile(r"create the (?P<name>.+) automation", re.I)
+
+
 def script(system, messages, tools):
     user = next((m["content"] for m in reversed(messages) if m["role"] == "user" and isinstance(m["content"], str)), "")
     if "planning module" in system:
@@ -28,23 +35,28 @@ def script(system, messages, tools):
                                     "depends_on": []},
                                    {"id": "s2", "agent": "research", "instruction": "Research the topic", "depends_on": []}],
                                   title="Email and research"))
-        if "weekly review" in user.lower():
-            return resp(plan_json([{"id": "s1", "agent": "operations", "instruction": "Create the weekly review automation",
-                                    "depends_on": []}], title="Weekly review automation"))
+        wanted = _AUTOMATION_REQUEST.search(user)
+        if wanted:
+            name = wanted["name"].strip()
+            return resp(plan_json([{"id": "s1", "agent": "operations", "instruction": f"Create the {name} automation",
+                                    "depends_on": []}], title=f"{name.capitalize()} automation"))
         if "durable" in user.lower():
             return resp('{"title":"Memory","mode":"delegate","steps":[{"id":"s1","agent":"knowledge",'
                         '"instruction":"Remember the preference"}]}')
         return resp(plan_json(direct=f"**Hello!** I'm LEXA. You said: _{user.split('USER REQUEST:')[-1].strip()}_",
                               title="Conversation"))
-    if "Write LEXA's final reply" in system and "weekly review" in str(messages).lower():
-        return resp("I prepared the **Weekly review** automation. It is waiting for your approval.")
+    if "Write LEXA's final reply" in system and _AUTOMATION_STEP.search(str(messages)):
+        name = _AUTOMATION_STEP.search(str(messages))["name"].strip().capitalize()  # type: ignore[index]
+        return resp(f"I prepared the **{name}** automation. It is waiting for your approval.")
     if "Write LEXA's final reply" in system:
         return resp("I researched the topic and prepared the email. **The email is waiting for your approval** — it "
                     "has not been sent yet.")
     if any(m["role"] == "tool" for m in messages):
         return resp("Done: " + [m for m in messages if m["role"] == "tool"][-1]["content"][0][1][:200])
     if "automation_create" in tools:
-        return resp("", [("automation_create", {"name": "Weekly review", "cron": "0 17 * * 5", "timezone": "UTC",
+        step = _AUTOMATION_STEP.search(user)
+        return resp("", [("automation_create", {"name": step["name"].strip().capitalize() if step else "Weekly review",
+                                                "cron": "0 17 * * 5", "timezone": "UTC",
                                                 "instruction": "Summarize my week"})])
     if "gmail_send" in tools:
         return resp("", [("gmail_send", {"to": "alex@example.com", "subject": "Project update",
@@ -55,6 +67,58 @@ def script(system, messages, tools):
 
 
 STATE["script"] = script
+
+
+# ── Voice test doubles ─────────────────────────────────────────────────────────────────────────────────────────
+# There is no OpenAI key in tests. Speech-to-text answers with the next text queued by the browser test (through the
+# test-only endpoint below) and text-to-speech returns a short silent WAV, so the REAL browser pipeline
+# (microphone → voice-activity detection → WAV upload → command → spoken reply → playback) runs end to end.
+import io  # noqa: E402
+import struct  # noqa: E402
+import wave  # noqa: E402
+
+from fastapi import APIRouter  # noqa: E402
+
+import main as app_module  # noqa: E402
+from api.routes import voice as voice_routes  # noqa: E402
+from core.llm import openai_provider  # noqa: E402
+
+VOICE_TEXTS: list[str] = []
+
+
+def silent_wav(seconds: float, rate: int = 16000) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(struct.pack("<h", 0) * int(rate * seconds))
+    return buf.getvalue()
+
+
+async def fake_transcribe(audio: bytes, filename: str, language: str | None = None) -> tuple[str, str]:
+    return (VOICE_TEXTS.pop(0) if VOICE_TEXTS else ""), "test-stt"
+
+
+async def fake_synthesize(text: str, voice: str) -> tuple[bytes, str]:
+    return silent_wav(0.4), "test-tts"
+
+
+openai_provider.transcribe = fake_transcribe  # type: ignore[assignment]
+openai_provider.synthesize = fake_synthesize  # type: ignore[assignment]
+voice_routes.voice_available = lambda: True  # type: ignore[assignment]
+
+control = APIRouter(prefix="/api/test", tags=["test-harness-only"])
+
+
+@control.get("/voice-script")
+async def set_voice_script(texts: str = "") -> dict:
+    """Queues what the next spoken utterances will be 'transcribed' as: ?texts=open automations|approve"""
+    VOICE_TEXTS[:] = [t for t in texts.split("|") if t]
+    return {"queued": len(VOICE_TEXTS)}
+
+
+app_module.app.include_router(control)
 
 
 async def main() -> None:

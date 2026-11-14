@@ -1,10 +1,10 @@
 "use client";
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, Eye, FileCheck2, Settings as SettingsIcon, ShieldCheck, Zap } from "lucide-react";
+import { AudioLines, Download, Eye, FileCheck2, Settings as SettingsIcon, ShieldCheck, Zap } from "lucide-react";
 import { useApi } from "@/hooks/use-api";
 import { api, post } from "@/services/api";
 import { cn, compact, timeAgo, usd } from "@/lib/utils";
@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Field, Input, Select } from "@/components/ui/input";
 import { useAuth } from "@/components/layout/auth";
+import { useVoice } from "@/components/voice/voice-provider";
 import type { PermissionMode, User } from "@/types";
 
 const MODES: { id: PermissionMode; title: string; icon: React.ElementType; desc: string }[] = [
@@ -129,26 +130,89 @@ function Security() {
 }
 
 function Preferences() {
-  const { user } = useAuth();
   const save = useSaveSettings();
   const { theme, setTheme } = useTheme();
-  const { data: caps } = useApi<{ server_tts: boolean; server_stt: boolean; voices: string[] }>("/api/voice/capabilities");
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card><CardHeader><CardTitle>Appearance</CardTitle></CardHeader><CardContent>
         <div className="flex gap-2" role="radiogroup" aria-label="Theme">{["dark", "light", "system"].map((t) => (
           <button key={t} role="radio" aria-checked={theme === t} onClick={() => { setTheme(t); void save({ theme: t }); }}
             className={cn("flex-1 rounded-lg border px-3 py-2 text-sm capitalize", theme === t ? "border-primary bg-primary/5" : "border-border")}>{t}</button>))}</div></CardContent></Card>
-      <Card><CardHeader><CardTitle>Voice</CardTitle></CardHeader><CardContent className="grid gap-3">
-        <label className="flex items-center justify-between text-sm">Speak responses aloud<Switch checked={!!user?.settings?.speak_responses} onCheckedChange={(v) => void save({ speak_responses: v })} /></label>
-        <Field label="LEXA voice" hint={caps?.server_tts ? "Server voice (OpenAI TTS)." : "Server TTS not configured — your browser's voice is used."}>
-          <Select disabled={!caps?.server_tts} value={user?.settings?.voice || "nova"} onChange={(e) => void save({ voice: e.target.value })}>
-            {(caps?.voices || ["nova"]).map((v) => <option key={v}>{v}</option>)}</Select></Field>
-        <p className="text-xs text-subtle">Speech recognition uses your browser when available, otherwise server transcription{caps?.server_stt ? "" : " (not configured)"}. The microphone is only used while you hold a conversation; always-on wake-word listening requires a desktop/mobile companion and is not done in the browser.</p>
-      </CardContent></Card>
+      <Card><CardHeader><CardTitle>Voice</CardTitle></CardHeader><CardContent className="grid gap-3 text-sm text-muted">
+        <p>LEXA can be used completely by voice: speak requests, navigate, fill forms, hear replies and approve actions.</p>
+        <Button variant="secondary" asChild><a href="/settings?tab=voice"><AudioLines />Voice settings</a></Button></CardContent></Card>
       <Card className="lg:col-span-2"><CardHeader><CardTitle>Data & backup</CardTitle></CardHeader><CardContent className="flex flex-wrap items-center gap-3 text-sm text-muted">
         <Button variant="secondary" asChild><a href="/api/export"><Download />Export my data (JSON)</a></Button>
         Server backups are run and verified by the VPS backup job (see docs/BACKUP.md). Ask the Security Agent for the verified backup status.</CardContent></Card>
+    </div>
+  );
+}
+
+
+const LANGUAGES: [string, string][] = [["", "Detect automatically"], ["en", "English"], ["hi", "Hindi"], ["ta", "Tamil"], ["te", "Telugu"],
+  ["kn", "Kannada"], ["ml", "Malayalam"], ["mr", "Marathi"], ["bn", "Bengali"], ["gu", "Gujarati"], ["ur", "Urdu"], ["es", "Spanish"],
+  ["fr", "French"], ["de", "German"], ["pt", "Portuguese"], ["it", "Italian"], ["ja", "Japanese"], ["ko", "Korean"], ["zh", "Chinese"],
+  ["ar", "Arabic"], ["ru", "Russian"]];
+
+function VoiceSettings() {
+  const { user } = useAuth();
+  const save = useSaveSettings();
+  const voice = useVoice();
+  const caps = voice.caps;
+  const st = user?.settings ?? {};
+  const [speed, setSpeed] = useState<number>(typeof st.voice_speed === "number" ? st.voice_speed : 1);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const changeSpeed = (v: number) => {
+    setSpeed(v);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => void save({ voice_speed: v }), 500);
+  };
+  const row = "flex items-center justify-between gap-4 rounded-lg border border-border p-3 text-sm";
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card className="lg:col-span-2"><CardHeader><CardTitle>Voice control</CardTitle>
+        <Button variant={voice.snap.active ? "secondary" : "gradient"} onClick={voice.toggle} aria-pressed={voice.snap.active}>
+          <AudioLines />{voice.snap.active ? "Turn voice mode off" : "Turn voice mode on"}</Button></CardHeader>
+        <CardContent className="grid gap-2 text-sm sm:grid-cols-2">
+          <div className="flex justify-between rounded-lg bg-surface-2/60 px-3 py-2"><span className="text-muted">Speech recognition</span>
+            <span>{caps ? (caps.server_stt ? <Badge tone="success">ready · {caps.stt_model}</Badge> : <Badge tone="warning">needs OPENAI_API_KEY</Badge>) : "checking…"}</span></div>
+          <div className="flex justify-between rounded-lg bg-surface-2/60 px-3 py-2"><span className="text-muted">Spoken replies</span>
+            <span>{caps ? (caps.server_tts ? <Badge tone="success">ready · {caps.tts_model}</Badge> : <Badge tone="neutral">browser voice</Badge>) : "checking…"}</span></div>
+          <p className="text-xs text-subtle sm:col-span-2">
+            Shortcut: <kbd className="rounded border border-border px-1">Alt</kbd> + <kbd className="rounded border border-border px-1">V</kbd> toggles voice from anywhere, <kbd className="rounded border border-border px-1">Esc</kbd> stops LEXA talking.
+            The microphone is only open while voice mode is on, and only finished sentences are sent for transcription. Nothing is recorded or stored by LEXA.
+            Estimated cost: about $0.003 per minute of your speech and $0.015 per minute of OpenAI voice (the browser voice is free).
+          </p>
+        </CardContent></Card>
+
+      <Card><CardHeader><CardTitle>Speaking</CardTitle></CardHeader><CardContent className="grid gap-3">
+        <label className={row}>Speak responses aloud
+          <Switch checked={!!st.speak_responses} onCheckedChange={(v) => void save({ speak_responses: v })} /></label>
+        <Field label="Voice engine" hint="The browser voice is free but less natural.">
+          <Select value={st.voice_engine === "browser" ? "browser" : "server"} onChange={(e) => void save({ voice_engine: e.target.value })}>
+            <option value="server">OpenAI voice (natural)</option><option value="browser">Browser voice (free)</option></Select></Field>
+        <Field label="LEXA voice" hint={caps?.server_tts ? "Used by the OpenAI voice engine." : "Needs OPENAI_API_KEY on the server."}>
+          <Select disabled={!caps?.server_tts} value={st.voice || "nova"} onChange={(e) => void save({ voice: e.target.value })}>
+            {(caps?.voices || ["nova"]).map((v) => <option key={v}>{v}</option>)}</Select></Field>
+        <Field label={`Speaking speed (${speed.toFixed(2)}×)`} hint="Say “speak slower” or “speak faster” any time.">
+          <input type="range" min={0.6} max={1.8} step={0.05} value={speed} onChange={(e) => changeSpeed(Number(e.target.value))}
+            aria-label="Speaking speed" className="w-full accent-[var(--primary)]" /></Field>
+      </CardContent></Card>
+
+      <Card><CardHeader><CardTitle>Listening</CardTitle></CardHeader><CardContent className="grid gap-3">
+        <Field label="Spoken language" hint="Detecting automatically works for most people; pick one if you speak mostly one language.">
+          <Select value={st.voice_language ?? ""} onChange={(e) => void save({ voice_language: e.target.value })}>
+            {LANGUAGES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}</Select></Field>
+        <Field label="Patience" hint="How long LEXA waits after you stop talking before it answers.">
+          <Select value={st.voice_patience ?? "normal"} onChange={(e) => void save({ voice_patience: e.target.value })}>
+            <option value="quick">Quick (0.6 s)</option><option value="normal">Normal (1 s)</option><option value="patient">Patient (1.8 s)</option></Select></Field>
+        <label className={row}><span><span className="block font-medium">Require “Hey LEXA”</span><span className="text-xs text-muted">Ignore speech that does not start with the wake phrase (useful in shared rooms).</span></span>
+          <Switch checked={!!st.voice_wake_phrase} onCheckedChange={(v) => void save({ voice_wake_phrase: v })} aria-label="Require Hey LEXA" /></label>
+        <label className={row}><span><span className="block font-medium">Sound cues</span><span className="text-xs text-muted">Short tones when voice starts, understands you or finishes.</span></span>
+          <Switch checked={st.voice_cues !== false} onCheckedChange={(v) => void save({ voice_cues: v })} aria-label="Sound cues" /></label>
+        <label className={row}><span><span className="block font-medium">Start voice automatically</span><span className="text-xs text-muted">Turns voice on with your first key press or click after you open LEXA (browsers do not allow it sooner).</span></span>
+          <Switch checked={!!st.voice_auto_start} onCheckedChange={(v) => void save({ voice_auto_start: v })} aria-label="Start voice automatically" /></label>
+      </CardContent></Card>
     </div>
   );
 }
@@ -162,10 +226,11 @@ function SettingsInner() {
       <PageHeader icon={SettingsIcon} title="Settings" description="Permissions, AI providers, usage and cost, security and preferences." />
       <Tabs value={tab} onValueChange={(v) => router.replace(`/settings?tab=${v}`)}>
         <TabsList><TabsTrigger value="permissions">AI & permissions</TabsTrigger><TabsTrigger value="usage">Usage & cost</TabsTrigger>
-          <TabsTrigger value="security">Security & audit</TabsTrigger><TabsTrigger value="preferences">Preferences</TabsTrigger></TabsList>
+          <TabsTrigger value="security">Security & audit</TabsTrigger><TabsTrigger value="voice">Voice</TabsTrigger><TabsTrigger value="preferences">Preferences</TabsTrigger></TabsList>
         <TabsContent value="permissions">{tab === "permissions" && <Permissions />}</TabsContent>
         <TabsContent value="usage">{tab === "usage" && <Usage />}</TabsContent>
         <TabsContent value="security">{tab === "security" && <Security />}</TabsContent>
+        <TabsContent value="voice">{tab === "voice" && <VoiceSettings />}</TabsContent>
         <TabsContent value="preferences">{tab === "preferences" && <Preferences />}</TabsContent>
       </Tabs>
     </div>

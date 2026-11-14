@@ -7,7 +7,6 @@ import { motion } from "framer-motion";
 import { ArrowRight, ArrowUp, Briefcase, CalendarDays, Inbox, Mic, Newspaper, Plug, Sparkles, Sunrise, Wallet } from "lucide-react";
 import { useApi } from "@/hooks/use-api";
 import { useEvents } from "@/hooks/use-events";
-import { useVoice } from "@/hooks/use-voice";
 import { runInstruction } from "@/services/api";
 import { cn, greeting, timeAgo, usd } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +16,7 @@ import { LexaOrb } from "@/components/layout/orb";
 import { AgentIcon } from "@/components/layout/agent-icon";
 import { useAuth } from "@/components/layout/auth";
 import { ApprovalCard } from "@/components/assistant/approval-card";
+import { useVoice, useVoiceLevel } from "@/components/voice/voice-provider";
 import type { Approval, Notification, Task } from "@/types";
 
 interface Dashboard {
@@ -60,7 +60,11 @@ export default function CommandCenter() {
       setBusy(false);
     }
   };
-  const voice = useVoice((t) => void run(t));
+  const voice = useVoice();
+  const level = useVoiceLevel();
+  const phase = voice.snap.phase;
+  const orbState = phase === "speaking" ? "speaking" : phase === "hearing" ? "listening" : phase === "transcribing" ? "processing"
+    : phase === "thinking" || data?.active_tasks.length ? "thinking" : "idle";
   const budgetPct = data ? Math.min(100, (data.usage.month_spend_usd / Math.max(data.usage.budget_usd, 0.0001)) * 100) : 0;
 
   return (
@@ -68,8 +72,8 @@ export default function CommandCenter() {
       <section className="relative overflow-hidden rounded-2xl border border-border bg-surface/70 px-5 py-8 sm:px-10">
         <div className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-grad opacity-[0.07] blur-3xl" />
         <div className="flex flex-col items-center gap-6 text-center md:flex-row md:text-left">
-          <button onClick={() => (voice.state === "listening" ? voice.stop() : void voice.start())} aria-label="Talk to LEXA" className="rounded-full">
-            <LexaOrb size={104} state={voice.state !== "idle" ? voice.state : (data?.active_tasks.length ? "thinking" : "idle")} level={voice.level} />
+          <button type="button" onClick={voice.toggle} aria-label="Talk to LEXA" aria-pressed={voice.snap.active} aria-keyshortcuts="Alt+V" className="rounded-full">
+            <LexaOrb size={104} state={orbState} level={level} />
           </button>
           <div className="w-full min-w-0 flex-1">
             <p className="text-xs uppercase tracking-[0.2em] text-subtle">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</p>
@@ -81,13 +85,12 @@ export default function CommandCenter() {
               onSubmit={(e) => { e.preventDefault(); void run(cmd); }}>
               <Sparkles className="size-4 shrink-0 text-primary" />
               <label htmlFor="cmd" className="sr-only">Command</label>
-              <input id="cmd" value={voice.interim || cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Tell LEXA what you need…"
+              <input id="cmd" value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Tell LEXA what you need…"
                 className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-subtle" />
-              <Button type="button" size="icon" variant="ghost" aria-label="Voice command" onClick={() => (voice.state === "listening" ? voice.stop() : void voice.start())}
-                className={cn(voice.state === "listening" && "text-primary")}><Mic /></Button>
+              <Button type="button" size="icon" variant="ghost" aria-label="Voice mode" aria-pressed={voice.snap.active} onClick={voice.toggle}
+                className={cn(voice.snap.active && "text-primary")}><Mic /></Button>
               <Button type="submit" size="icon" variant="gradient" aria-label="Run" loading={busy}>{!busy && <ArrowUp />}</Button>
             </form>
-            {voice.error && <p className="mt-2 text-xs text-danger" role="alert">{voice.error}</p>}
           </div>
         </div>
         {data && !data.providers.anthropic && !data.providers.openai && (

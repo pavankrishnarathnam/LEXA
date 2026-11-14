@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Copy, Pause, Play, Plus, Trash2, Workflow as WfIcon, Zap } from "lucide-react";
 import { useApi } from "@/hooks/use-api";
+import { useConfirm } from "@/components/voice/confirm-provider";
 import { del, post } from "@/services/api";
 import { timeAgo } from "@/lib/utils";
 import { EmptyState, PageHeader, StatusBadge } from "@/components/ui/misc";
@@ -83,7 +84,13 @@ function Runs({ id }: { id: string }) {
 
 export default function AutomationsPage() {
   const { data, reload } = useApi<Workflow[]>("/api/automations");
+  const { confirm } = useConfirm();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const remove = async (w: Workflow) => {
+    const ok = await confirm({ title: `Delete ${w.name}?`, description: "The automation and its schedule are removed. Past runs stay in the task history.",
+      confirmLabel: "Delete automation", destructive: true });
+    if (ok) void act(() => del(`/api/automations/${w.id}`), "Deleted");
+  };
   const act = async (fn: () => Promise<unknown>, msg: string) => { try { await fn(); toast.success(msg); void reload(); } catch (e) { toast.error((e as Error).message); } };
   return (
     <div className="mx-auto max-w-5xl">
@@ -103,9 +110,9 @@ export default function AutomationsPage() {
               {w.agent_slug && <Badge>{w.agent_slug}</Badge>}
               <span className="text-xs text-subtle">{w.next_run_at ? `next ${new Date(w.next_run_at).toLocaleString()}` : `${w.run_count} runs`}</span>
               <div className="flex gap-1">
-                <Button size="icon" variant="ghost" aria-label="Run now" onClick={() => void act(() => post(`/api/automations/${w.id}/run`), "Started")}><Zap /></Button>
-                <Button size="icon" variant="ghost" aria-label={w.enabled ? "Pause" : "Resume"} onClick={() => void act(() => post(`/api/automations/${w.id}/toggle`), w.enabled ? "Paused" : "Resumed")}>{w.enabled ? <Pause /> : <Play />}</Button>
-                <Button size="icon" variant="ghost" aria-label="Delete" onClick={() => confirm("Delete automation?") && void act(() => del(`/api/automations/${w.id}`), "Deleted")}><Trash2 /></Button>
+                <Button size="icon" variant="ghost" aria-label={`Run ${w.name} now`} onClick={() => void act(() => post(`/api/automations/${w.id}/run`), "Started")}><Zap /></Button>
+                <Button size="icon" variant="ghost" aria-label={`${w.enabled ? "Pause" : "Resume"} ${w.name}`} onClick={() => void act(() => post(`/api/automations/${w.id}/toggle`), w.enabled ? "Paused" : "Resumed")}>{w.enabled ? <Pause /> : <Play />}</Button>
+                <Button size="icon" variant="ghost" aria-label={`Delete ${w.name}`} data-voice-confirms onClick={() => void remove(w)}><Trash2 /></Button>
               </div>
             </div>
             {expanded === w.id && <div className="mt-3 border-t border-border pt-3"><p className="mb-2 text-xs font-medium">Execution history</p><Runs id={w.id} />

@@ -5,7 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { Command } from "cmdk";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
-import { Bell, ChevronsUpDown, LogOut, Menu, Moon, Search, Sun, X, Zap } from "lucide-react";
+import { Bell, ChevronsUpDown, HelpCircle, LogOut, Menu, Mic, MicOff, Moon, Search, Sun, X, Zap } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn, timeAgo } from "@/lib/utils";
 import { NAV, ALL_NAV } from "./nav";
@@ -15,6 +15,7 @@ import { useEvents } from "@/hooks/use-events";
 import { useApi } from "@/hooks/use-api";
 import { post, runInstruction } from "@/services/api";
 import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
+import { useVoice } from "@/components/voice/voice-provider";
 import type { Notification } from "@/types";
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
@@ -73,6 +74,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
 function CommandPalette({ open, setOpen }: { open: boolean; setOpen: (v: boolean) => void }) {
   const router = useRouter();
+  const voice = useVoice();
   const [q, setQ] = useState("");
   const go = (href: string) => { setOpen(false); router.push(href); };
   const ask = async () => {
@@ -108,6 +110,16 @@ function CommandPalette({ open, setOpen }: { open: boolean; setOpen: (v: boolean
                       <n.icon className="size-4 text-muted" />{n.label}
                     </Command.Item>
                   ))}
+                </Command.Group>
+                <Command.Group heading="Voice" className="text-[11px] text-subtle [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1">
+                  <Command.Item value="voice mode toggle talk speak microphone" onSelect={() => { setOpen(false); voice.toggle(); }}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-foreground data-[selected=true]:bg-surface-2">
+                    <Mic className="size-4 text-muted" />{voice.snap.active ? "Turn voice mode off" : "Turn voice mode on"}
+                  </Command.Item>
+                  <Command.Item value="voice help what can i say commands" onSelect={() => { setOpen(false); voice.setHelpOpen(true); }}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm text-foreground data-[selected=true]:bg-surface-2">
+                    <HelpCircle className="size-4 text-muted" />What can I say?
+                  </Command.Item>
                 </Command.Group>
                 {q.trim() && (
                   <Command.Group heading="Ask" className="text-[11px] text-subtle [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1">
@@ -175,6 +187,19 @@ function Notifications() {
   );
 }
 
+function VoiceButton() {
+  const { snap, toggle } = useVoice();
+  const on = snap.active;
+  return (
+    <button type="button" onClick={toggle} aria-pressed={on} aria-label="Voice mode" aria-keyshortcuts="Alt+V" title="Voice mode (Alt+V)"
+      className={cn("flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm transition hover:bg-surface-2",
+        on ? "bg-primary/15 text-primary" : "text-muted hover:text-foreground")}>
+      {on ? <Mic className="size-4" /> : <MicOff className="size-4" />}
+      <span className="hidden sm:inline" aria-hidden>Voice</span>
+    </button>
+  );
+}
+
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const mounted = useSyncExternalStore(() => () => undefined, () => true, () => false);
@@ -190,6 +215,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const { user, loading } = useAuth();
+  const voice = useVoice();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -210,6 +236,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-white">Skip to content</a>
+      <button type="button" onClick={voice.toggle} aria-keyshortcuts="Alt+V"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-14 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-white">
+        {voice.snap.active ? "Turn voice control off (Alt+V)" : "Turn voice control on (Alt+V)"}
+      </button>
       <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 border-r border-border bg-surface/60 lg:block">
         <Sidebar />
       </aside>
@@ -236,11 +266,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <kbd className="ml-auto hidden rounded border border-border px-1.5 text-[10px] sm:inline">⌘K</kbd>
           </button>
           <div className="ml-auto flex items-center gap-1">
+            <VoiceButton />
             <ThemeToggle />
             <Notifications />
           </div>
         </header>
-        <main id="main" className="ambient flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main id="main" tabIndex={-1} className={cn("ambient flex-1 px-4 py-6 outline-none sm:px-6 lg:px-8", voice.snap.active && "pb-56")}>{children}</main>
       </div>
       <CommandPalette open={paletteOpen} setOpen={setPaletteOpen} />
     </div>

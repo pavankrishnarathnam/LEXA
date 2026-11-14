@@ -65,9 +65,9 @@ export async function upload<T>(p: string, form: FormData): Promise<T> {
   return api<T>(p, { method: "POST", body: form });
 }
 
-/** Creates a conversation, sends the instruction to LEXA CORE and returns ids. */
-export async function runInstruction(content: string, agent?: string) {
+/** Creates a conversation, sends the instruction to LEXA CORE and returns ids. `voice` asks for short, spoken-style replies. */
+export async function runInstruction(content: string, agent?: string, opts: { voice?: boolean } = {}) {
   const conv = await post<{ id: string }>("/api/conversations");
-  const res = await post<{ task_id: string }>(`/api/conversations/${conv.id}/messages`, { content, agent });
+  const res = await post<{ task_id: string }>(`/api/conversations/${conv.id}/messages`, { content, agent, voice: opts.voice || undefined });
   return { conversationId: conv.id, taskId: res.task_id };
 }
