@@ -17,7 +17,7 @@ RUN npm run build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0 KEEP_ALIVE_TIMEOUT=65000
 RUN addgroup -S lexa && adduser -S lexa -G lexa
 COPY --from=build --chown=lexa:lexa /app/.next/standalone ./
 COPY --from=build --chown=lexa:lexa /app/.next/static ./.next/static

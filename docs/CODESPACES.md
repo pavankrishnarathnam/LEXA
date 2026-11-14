@@ -13,12 +13,25 @@ GitHub → **Settings** (your profile) → **Codespaces** → **Secrets** → *N
 ## 2. Start LEXA
 On the repository page: **Code → Codespaces → Create codespace on main**.
 
-The first start takes about 3–5 minutes (it installs dependencies and builds the app). When the terminal prints
-`LEXA is running → https://<name>-3000.app.github.dev`, the **LEXA** tab opens automatically. You can also open
-it from the **Ports** tab, under port 3000. Register your account; the first account becomes the owner.
+The first start takes about 3–5 minutes (it installs dependencies and builds the app). When it finishes, the
+terminal prints a framed message:
 
-The URL is **private by default**: only your signed-in GitHub account can open it. Leave the port visibility
-as *Private*.
+```
+ LEXA is ready and the address below was verified:
+   https://<name>-3100.app.github.dev
+```
+
+That address has been **tested through GitHub's port forwarding before it is shown**, so it is the one to use.
+Open it in a normal browser tab (not inside the editor's preview pane). Register your account; the first account
+becomes the owner. To see the address again at any time: `bash .devcontainer/url.sh` (it also runs each time you
+open the codespace).
+
+The address is **private**: only your signed-in GitHub account can open it. Leave the port visibility as
+*Private*.
+
+> **Why the port may not be 3000:** GitHub's forwarding can answer `502 Bad Gateway` for one particular port even
+> though the app is healthy. `start.sh` therefore tests the real forwarded address and, if it fails, moves LEXA to
+> another port (3100 → 3101 → 3102 → 3000) until one works, then remembers it for the next start.
 
 ## 3. Day to day
 - Your codespace **stops when idle** (30 minutes by default; up to 4 hours under GitHub → Settings → Codespaces →
@@ -36,8 +49,10 @@ In the codespace terminal:
 tail -f ~/lexa-data/logs/api.log ~/lexa-data/logs/worker.log ~/lexa-data/logs/web.log
 ```
 ```bash
-bash .devcontainer/start.sh      # restart all LEXA processes
+bash .devcontainer/start.sh      # restart all LEXA processes and re-verify the address
 ```
+If the start-up message says *the public address could not be verified*, or the browser shows **502**: in the
+**Ports** tab right-click the LEXA port → **Stop Forwarding Port**, then run `bash .devcontainer/start.sh` again.
 If the app says *No AI provider is configured*, the secret was added after the codespace was created. Rebuild
 the container.
 

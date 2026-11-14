@@ -8,9 +8,8 @@
     "ghcr.io/devcontainers/features/node:1": { "version": "22" }
   },
   "hostRequirements": { "cpus": 2, "memory": "8gb" },
-  "forwardPorts": [3000, 8000],
   "portsAttributes": {
-    "3000": { "label": "LEXA", "onAutoForward": "openBrowser" },
+    "3100-3199": { "label": "LEXA", "onAutoForward": "openBrowserOnce" },
     "8000": { "label": "LEXA API", "onAutoForward": "silent" }
   },
   "secrets": {
@@ -21,6 +20,7 @@
   },
   "postCreateCommand": "bash .devcontainer/setup.sh",
   "postStartCommand": "bash .devcontainer/start.sh",
+  "postAttachCommand": "bash .devcontainer/url.sh",
   "customizations": {
     "codespaces": { "openFiles": ["docs/CODESPACES.md"] },
     "vscode": { "extensions": ["ms-python.python", "dbaeumer.vscode-eslint", "bradlc.vscode-tailwindcss"] }
