@@ -11,7 +11,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from agents.definitions import GLOBAL_POLICY
+from agents.definitions import GLOBAL_POLICY, VOICE_STYLE
 from agents.policy import decide
 from agents.registry import AgentConfig
 from agents.tools import TOOLS, ToolContext, ToolResult
@@ -74,7 +74,7 @@ async def _available_tools(user_id: uuid.UUID, cfg: AgentConfig) -> tuple[list[s
 
 
 async def build_system_prompt(cfg: AgentConfig, user: User, instruction: str, missing: list[str],
-                              extra_context: str = "") -> str:
+                              extra_context: str = "", voice: bool = False) -> str:
     async with SessionLocal() as db:
         profile = await db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
         memories = await context_block(db, user.id, instruction) if cfg.memory_access != "none" else ""
@@ -93,16 +93,18 @@ async def build_system_prompt(cfg: AgentConfig, user: User, instruction: str, mi
                      "disabled; tell the user to connect them in Integrations if required.")
     if extra_context:
         parts.append(f"# Results from other agents in this task\n{extra_context}")
+    if voice:
+        parts.append(VOICE_STYLE)
     return "\n\n".join(parts)
 
 
 async def run_agent(cfg: AgentConfig, user_id: uuid.UUID, instruction: str, *, task_id: uuid.UUID | None,
-                    extra_context: str = "", step_id: str = "s1") -> AgentRunResult:
+                    extra_context: str = "", step_id: str = "s1", voice: bool = False) -> AgentRunResult:
     async with SessionLocal() as db:
         user = await db.get(User, user_id)
     assert user is not None
     tool_names, missing = await _available_tools(user_id, cfg)
-    system = await build_system_prompt(cfg, user, instruction, missing, extra_context)
+    system = await build_system_prompt(cfg, user, instruction, missing, extra_context, voice)
     # Web search: Claude models use Anthropic's hosted search; every other model uses the web_search tool
     # (OpenAI Responses API).
     wants_search = cfg.web_search or "web_search" in tool_names

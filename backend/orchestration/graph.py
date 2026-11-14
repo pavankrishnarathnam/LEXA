@@ -17,15 +17,16 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy, Send
+from sqlalchemy import func, select
 
-from agents.definitions import CORE_PROMPT, GLOBAL_POLICY
+from agents.definitions import CORE_PROMPT, GLOBAL_POLICY, VOICE_STYLE
 from agents.registry import AgentConfig, list_agents
 from agents.runner import run_agent
 from core.config import settings
 from core.llm.router import CallContext, RoutedSession, stream_chat
 from core.llm.types import ProviderError
 from core.redis import publish_event
-from database.models import Task, TaskExecution, TaskStatus, User
+from database.models import Message, Task, TaskExecution, TaskStatus, UsageRecord, User
 from database.session import SessionLocal
 from memory.store import context_block
 from orchestration.tasks import TaskCancelled, is_cancelled, set_status, task_log
@@ -42,6 +43,7 @@ class GraphState(TypedDict, total=False):
     user_id: str
     request: str
     history: str
+    voice: bool
     mode: str
     title: str
     plan: list[dict[str, Any]]
@@ -57,6 +59,7 @@ class StepInput(TypedDict):
     user_id: str
     step: dict[str, Any]
     context: str
+    voice: bool
 
 
 PLANNER_PROMPT = """You are the planning module of LEXA CORE. Decide how to handle the user's request.
@@ -110,7 +113,8 @@ async def plan_node(state: GraphState) -> dict[str, Any]:
         await db.commit()
     system = "\n\n".join([CORE_PROMPT, PLANNER_PROMPT.format(agents=_agents_desc(agents), max_steps=MAX_STEPS),
                           GLOBAL_POLICY, f"Current time (UTC): {datetime.now(UTC).isoformat(timespec='minutes')}",
-                          f"Relevant memory:\n{memories or '(none)'}"])
+                          f"Relevant memory:\n{memories or '(none)'}"]
+                         + ([VOICE_STYLE] if state.get("voice") else []))
     prompt = (f"Recent conversation:\n{state.get('history') or '(none)'}\n\n" if state.get("history") else "") + \
         f"USER REQUEST:\n{state['request']}"
     session = RoutedSession(CallContext(user_id, purpose="planning", task_id=task_id, agent_slug="core"),
@@ -155,7 +159,7 @@ def schedule_edges(state: GraphState) -> list[Send] | str:
         ctx = "\n\n".join(f"## {d} ({results[d]['agent']}, {results[d]['status']})\n{results[d]['output'][:6000]}"
                           for d in s["depends_on"])
         sends.append(Send("run_step", StepInput(task_id=state["task_id"], user_id=state["user_id"], step=s,
-                                                context=ctx)))
+                                                context=ctx, voice=bool(state.get("voice")))))
     return sends
 
 
@@ -187,7 +191,7 @@ async def run_step_node(inp: StepInput) -> dict[str, Any]:
         if cfg is None or not cfg.enabled:
             raise RuntimeError(f"Agent '{step['agent']}' is unavailable or disabled")
         res = await run_agent(cfg, user_id, step["instruction"], task_id=task_id, extra_context=inp["context"],
-                              step_id=step["id"])
+                              step_id=step["id"], voice=bool(inp.get("voice")))
         status, output, error, approvals = res.status, res.output, res.error, res.approvals
     except TaskCancelled:
         raise
@@ -239,7 +243,8 @@ async def synthesize_node(state: GraphState) -> dict[str, Any]:
     else:
         body = "\n\n".join(f"### {sid} — {r['agent']} [{r['status']}]\n{r['output'][:8000]}"
                            + (f"\nERROR: {r['error']}" if r.get("error") else "") for sid, r in results.items())
-        system = "\n\n".join([CORE_PROMPT, GLOBAL_POLICY, SYNTH_PROMPT])
+        system = "\n\n".join([CORE_PROMPT, GLOBAL_POLICY, SYNTH_PROMPT]
+                              + ([VOICE_STYLE] if state.get("voice") else []))
         msgs = [{"role": "user", "content": f"USER REQUEST:\n{state['request']}\n\nSPECIALIST RESULTS:\n{body}\n\n"
                                            f"Pending approvals: {len(approvals)}"}]
         parts: list[str] = []
@@ -298,10 +303,9 @@ async def execute_task(task_id: uuid.UUID) -> None:
         assert user is not None
         user_id, request, conv_id = task.user_id, task.request, task.conversation_id
         history = ""
+        user_msg = await db.scalar(select(Message).where(Message.task_id == task_id, Message.role == "user"))
+        voice = bool(user_msg and (user_msg.meta or {}).get("voice"))
         if conv_id:
-            from sqlalchemy import select
-
-            from database.models import Message
             rows = (await db.execute(select(Message).where(Message.conversation_id == conv_id,
                                                            Message.task_id != task_id)
                                      .order_by(Message.created_at.desc()).limit(8))).scalars().all()
@@ -315,13 +319,10 @@ async def execute_task(task_id: uuid.UUID) -> None:
             final_state = await graph.ainvoke(None, config)
         else:
             final_state = await graph.ainvoke(GraphState(task_id=str(task_id), user_id=str(user_id), request=request,
-                                                         history=history), config)
+                                                         history=history, voice=voice), config)
     status = TaskStatus(final_state.get("status") or TaskStatus.COMPLETED.value)
     final = final_state.get("final") or ""
     async with SessionLocal() as db:
-        from sqlalchemy import func, select
-
-        from database.models import Message, UsageRecord
         cost = await db.scalar(select(func.coalesce(func.sum(UsageRecord.cost_usd), 0))
                                .where(UsageRecord.task_id == task_id))
         task = await db.get(Task, task_id)

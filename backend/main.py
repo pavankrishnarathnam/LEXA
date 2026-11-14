@@ -25,6 +25,7 @@ from api.routes import (
     records,
     system,
     tasks,
+    voice,
 )
 from core.config import settings
 from core.llm.types import ProviderNotConfigured
@@ -87,5 +88,5 @@ async def provider_handler(_: Request, exc: ProviderNotConfigured) -> JSONRespon
     return JSONResponse({"detail": str(exc)}, status_code=503)
 
 
-for r in (auth, chat, documents, agents_routes, tasks, memory, integrations, automations, career, records, system):
+for r in (auth, chat, documents, agents_routes, tasks, memory, integrations, automations, career, records, system, voice):
     app.include_router(r.router)

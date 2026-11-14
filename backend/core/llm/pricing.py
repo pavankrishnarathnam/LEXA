@@ -18,8 +18,14 @@ _DEFAULT: dict[str, tuple[float, float, float, float]] = {
     "gpt-5.1": (1.25, 10.0, 0.125, 0.0),
     "gpt-5-mini": (0.25, 2.0, 0.025, 0.0),
     "text-embedding-3-small": (0.02, 0.0, 0.0, 0.0),
-    "gpt-4o-mini-transcribe": (1.25, 5.0, 0.0, 0.0),
-    "gpt-4o-mini-tts": (0.60, 12.0, 0.0, 0.0),
+    # Audio is billed per minute, not per token. Usage is recorded as synthetic tokens (16 per second of audio,
+    # 960 per minute) and priced so the table reproduces the list price per minute. These are ESTIMATES:
+    # gpt-4o-mini-transcribe $0.003/min, whisper-1 $0.006/min, gpt-4o-mini-tts about $0.015/min of speech,
+    # tts-1 $15 per 1M characters. Override with MODEL_PRICING_JSON when OpenAI's prices change.
+    "gpt-4o-mini-transcribe": (3.125, 0.0, 0.0, 0.0),
+    "whisper-1": (6.25, 0.0, 0.0, 0.0),
+    "gpt-4o-mini-tts": (0.60, 15.625, 0.0, 0.0),
+    "tts-1": (15.0, 0.0, 0.0, 0.0),
 }
 
 

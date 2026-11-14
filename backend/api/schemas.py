@@ -42,12 +42,21 @@ class SettingsIn(BaseModel):
     speak_responses: bool | None = None
     notifications: dict[str, bool] | None = None
     auto_memory: bool | None = None
+    # Voice preferences
+    voice_speed: float | None = Field(default=None, ge=0.6, le=1.8)
+    voice_language: str | None = Field(default=None, max_length=3, pattern=r"^([a-z]{2,3})?$")  # "" = auto-detect
+    voice_patience: Literal["quick", "normal", "patient"] | None = None
+    voice_auto_start: bool | None = None
+    voice_wake_phrase: bool | None = None
+    voice_cues: bool | None = None
+    voice_engine: Literal["server", "browser"] | None = None
 
 
 class MessageIn(BaseModel):
     content: str = Field(min_length=1, max_length=20000)
     document_ids: list[str] = Field(default_factory=list, max_length=10)
     agent: str | None = Field(default=None, max_length=64)
+    voice: bool = False  # the user is listening (text-to-speech): LEXA answers in short spoken sentences
 
 
 class AgentIn(BaseModel):

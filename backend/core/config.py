@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     anthropic_server_fallback: bool = True
     embedding_model: str = "text-embedding-3-small"
     embedding_dim: int = 1536
+    # Voice (OpenAI). The fallback models are used when the account has no access to the primary one.
+    stt_model: str = "gpt-4o-mini-transcribe"
+    stt_fallback_model: str = "whisper-1"
+    tts_model: str = "gpt-4o-mini-tts"
+    tts_fallback_model: str = "tts-1"
+    voice_stt_per_minute: int = 40  # speech segments per user per minute (cost guard)
 
     # Limits
     monthly_budget_usd: float = 50.0

@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response
 from sqlalchemy import delete, func, select
 from sse_starlette.sse import EventSourceResponse
@@ -12,10 +12,6 @@ from sse_starlette.sse import EventSourceResponse
 from api.deps import DB, CurrentUser
 from api.schemas import MessageIn
 from api.serializers import iso
-from core.config import settings
-from core.llm import openai_provider
-from core.llm.types import ProviderError, ProviderNotConfigured, Usage
-from core.llm.usage import record_usage
 from core.redis import publish_event, subscribe
 from database.models import Conversation, Document, Message, Task, TaskStatus
 from workers.queue import enqueue
@@ -109,7 +105,7 @@ async def send_message(cid: uuid.UUID, body: MessageIn, user: CurrentUser, db: D
     db.add(task)
     await db.flush()
     m = Message(conversation_id=c.id, user_id=user.id, role="user", content=body.content, task_id=task.id,
-                attachments=attachments)
+                attachments=attachments, meta={"voice": True} if body.voice else {})
     db.add(m)
     if c.title == "New conversation":
         c.title = body.content[:60] + ("…" if len(body.content) > 60 else "")
@@ -135,46 +131,3 @@ async def events(request: Request, user: CurrentUser) -> EventSourceResponse:
     # no-transform stops intermediaries (Next.js/Nginx gzip) from buffering the stream.
     return EventSourceResponse(gen(), ping=20, headers={"Cache-Control": "no-cache, no-transform",
                                                          "X-Accel-Buffering": "no"})
-
-
-# ------------------------------------------------------------------ voice
-@router.post("/voice/transcribe")
-async def transcribe(user: CurrentUser, audio: UploadFile = File(...)) -> dict:
-    data = await audio.read()
-    if len(data) > 25 * 1024 * 1024:
-        raise HTTPException(413, "Audio too large (max 25MB)")
-    try:
-        text = await openai_provider.transcribe(data, audio.filename or "speech.webm")
-    except ProviderNotConfigured as exc:
-        raise HTTPException(503, "Server speech-to-text requires OPENAI_API_KEY; the browser's built-in "
-                                 "recognition can be used instead.") from exc
-    except ProviderError as exc:
-        raise HTTPException(502, str(exc)) from exc
-    # gpt-4o-mini-transcribe is billed per audio minute; approximate as tokens for tracking.
-    await record_usage(user_id=user.id, provider="openai", model="gpt-4o-mini-transcribe",
-                       usage=Usage(input_tokens=len(data) // 32), purpose="stt")
-    return {"text": text}
-
-
-@router.post("/voice/speak")
-async def speak(body: dict, user: CurrentUser) -> Response:
-    text = str(body.get("text", ""))[:4000]
-    if not text:
-        raise HTTPException(422, "text required")
-    voice = str(body.get("voice") or (user.settings or {}).get("voice") or "nova")
-    try:
-        audio = await openai_provider.synthesize(text, voice=voice)
-    except ProviderNotConfigured as exc:
-        raise HTTPException(503, "Server text-to-speech requires OPENAI_API_KEY; browser speech synthesis is "
-                                 "used instead.") from exc
-    except ProviderError as exc:
-        raise HTTPException(502, str(exc)) from exc
-    await record_usage(user_id=user.id, provider="openai", model="gpt-4o-mini-tts",
-                       usage=Usage(input_tokens=len(text) // 4, output_tokens=len(audio) // 1000), purpose="tts")
-    return Response(content=audio, media_type="audio/mpeg")
-
-
-@router.get("/voice/capabilities")
-async def voice_caps(user: CurrentUser) -> dict:
-    return {"server_stt": bool(settings.openai_api_key), "server_tts": bool(settings.openai_api_key),
-            "voices": ["alloy", "ash", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"]}

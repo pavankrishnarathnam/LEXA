@@ -198,24 +198,54 @@ async def embed(texts: list[str]) -> tuple[list[list[float]], int]:
     return [d.embedding for d in resp.data], resp.usage.total_tokens if resp.usage else 0
 
 
-async def transcribe(audio: bytes, filename: str, model: str = "gpt-4o-mini-transcribe") -> str:
-    client = get_client()
-    try:
-        resp = await client.audio.transcriptions.create(file=(filename, audio), model=model)
-    except openai.APIError as exc:
-        raise _map_error(exc) from exc
-    return resp.text
+# A 403/404 on a model means this account cannot use it (not enabled / unknown name): try the fallback model.
+_NO_MODEL_ACCESS = (403, 404)
 
 
-async def synthesize(text: str, voice: str = "nova", model: str = "gpt-4o-mini-tts") -> bytes:
+async def transcribe(audio: bytes, filename: str, language: str | None = None) -> tuple[str, str]:
+    """Speech to text. Returns (text, model_used); falls back to STT_FALLBACK_MODEL if the primary is unavailable."""
     client = get_client()
-    try:
-        resp = await client.audio.speech.create(
-            model=model, voice=voice, input=text[:4000], response_format="mp3",
-            instructions="Warm, calm, confident and concise. You are LEXA, a personal AI operating system.")
-    except openai.APIError as exc:
-        raise _map_error(exc) from exc
-    return resp.content
+    models = [settings.stt_model]
+    if settings.stt_fallback_model and settings.stt_fallback_model != settings.stt_model:
+        models.append(settings.stt_fallback_model)
+    last: ProviderError | None = None
+    for model in models:
+        params: dict[str, Any] = {"file": (filename, audio), "model": model}
+        if language:
+            params["language"] = language
+        try:
+            resp = await client.audio.transcriptions.create(**params)
+        except openai.APIError as exc:
+            last = _map_error(exc)
+            if last.status in _NO_MODEL_ACCESS:
+                continue
+            raise last from exc
+        return resp.text or "", model
+    assert last is not None
+    raise last
+
+
+async def synthesize(text: str, voice: str = "nova") -> tuple[bytes, str]:
+    """Text to speech (mp3). Returns (audio, model_used); falls back to TTS_FALLBACK_MODEL if needed."""
+    client = get_client()
+    models = [settings.tts_model]
+    if settings.tts_fallback_model and settings.tts_fallback_model != settings.tts_model:
+        models.append(settings.tts_fallback_model)
+    last: ProviderError | None = None
+    for model in models:
+        params: dict[str, Any] = {"model": model, "voice": voice, "input": text[:4000], "response_format": "mp3"}
+        if model.startswith("gpt-4o"):  # only the gpt-4o TTS models accept style instructions
+            params["instructions"] = "Warm, calm, clear and natural. You are LEXA, a personal AI assistant."
+        try:
+            resp = await client.audio.speech.create(**params)
+        except openai.APIError as exc:
+            last = _map_error(exc)
+            if last.status in _NO_MODEL_ACCESS:
+                continue
+            raise last from exc
+        return resp.content, model
+    assert last is not None
+    raise last
 
 
 async def check_available() -> tuple[bool, str]:

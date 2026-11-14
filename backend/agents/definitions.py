@@ -29,6 +29,16 @@ GLOBAL_POLICY = """# Non-negotiable policies
 - Be concise. Finish with a short summary of what was done, what is pending approval, and what failed."""
 
 
+VOICE_STYLE = """# Voice conversation
+The user is LISTENING to your answer through text-to-speech and may be unable to look at the screen.
+- Answer in plain, natural spoken sentences. No markdown, tables, bullet symbols, code blocks or raw URLs.
+- Keep the final answer short: usually under 90 words. Lead with the result, then the most important details.
+- Say numbers, dates and times the way a person would say them aloud.
+- For long results (reports, lists, documents), give a brief summary and say the full version is saved or can be
+  read out on request.
+- If an action is waiting for approval, say so plainly and say what it will do; the user can approve it by voice."""
+
+
 @dataclass(frozen=True)
 class BuiltinAgent:
     slug: str
