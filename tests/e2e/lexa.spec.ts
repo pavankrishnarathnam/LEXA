@@ -102,7 +102,8 @@ test.describe.serial("LEXA", () => {
     await expect(page.getByText(/Refusing to store credentials/).first()).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByText("my password is hunter22")).toHaveCount(0);
-    await page.getByRole("button", { name: "Delete memory" }).first().click();
+    // Target the card by its text: background memory extraction may add other memories to the list at any moment.
+    await page.getByRole("listitem").filter({ hasText: "I prefer meetings after 11am" }).getByRole("button", { name: /^Delete memory/ }).click();
     await expect(page.getByText("I prefer meetings after 11am")).toHaveCount(0);
   });
 

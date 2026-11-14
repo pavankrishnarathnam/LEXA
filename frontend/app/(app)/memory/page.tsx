@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Brain, Download, Pin, PinOff, Plus, Search, Trash2 } from "lucide-react";
+import { Brain, Download, Pencil, Pin, PinOff, Plus, Search, Trash2 } from "lucide-react";
 import { useApi } from "@/hooks/use-api";
 import { useConfirm } from "@/components/voice/confirm-provider";
 import { api, del, post } from "@/services/api";
@@ -118,13 +118,14 @@ export default function MemoryPage() {
               <div className="space-y-2"><Textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3} />
                 <div className="flex gap-2"><Button size="sm" onClick={() => void update(m, { content: draft })}>Save</Button><Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button></div></div>
             ) : (<>
-              <p className="cursor-text text-sm" onClick={() => { setEditing(m.id); setDraft(m.content); }}>{m.content}</p>
+              <p className="text-sm">{m.content}</p>
               <div className="mt-2 flex items-center gap-1.5 text-[11px] text-subtle">
                 <Badge>{LABELS[m.category] || m.category}</Badge><Badge tone={m.source === "user" ? "primary" : "neutral"}>{m.source}</Badge>
                 {m.score != null && <span>relevance {m.score}</span>}<span>{timeAgo(m.updated_at)}</span>
-                <span className="ml-auto flex gap-1 opacity-60 group-hover:opacity-100">
-                  <button aria-label={m.pinned ? "Unpin" : "Pin"} onClick={() => void update(m, { pinned: !m.pinned })}>{m.pinned ? <PinOff className="size-3.5 text-primary" /> : <Pin className="size-3.5" />}</button>
-                  <button aria-label="Delete memory" className="hover:text-danger" onClick={() => void del(`/api/memory/${m.id}`).then(() => reload())}><Trash2 className="size-3.5" /></button></span>
+                <span className="ml-auto flex gap-1.5 opacity-70 focus-within:opacity-100 group-hover:opacity-100">
+                  <button aria-label={`Edit memory: ${m.content.slice(0, 40)}`} onClick={() => { setEditing(m.id); setDraft(m.content); }}><Pencil className="size-3.5" /></button>
+                  <button aria-label={`${m.pinned ? "Unpin" : "Pin"} memory: ${m.content.slice(0, 40)}`} onClick={() => void update(m, { pinned: !m.pinned })}>{m.pinned ? <PinOff className="size-3.5 text-primary" /> : <Pin className="size-3.5" />}</button>
+                  <button aria-label={`Delete memory: ${m.content.slice(0, 40)}`} className="hover:text-danger" onClick={() => void del(`/api/memory/${m.id}`).then(() => reload())}><Trash2 className="size-3.5" /></button></span>
               </div></>)}
           </li>))}</ul>)}
     </div>
