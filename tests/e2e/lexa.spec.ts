@@ -118,6 +118,36 @@ test.describe.serial("LEXA", () => {
     await expect(page.getByText("WhatsApp Business", { exact: true })).toBeVisible();
   });
 
+  test("trading desk works with no AI model: reached from the sidebar, rules, then a real run", async ({ page }) => {
+    await login(page);
+    await page.getByRole("link", { name: "Trading" }).first().click();
+    await expect(page).toHaveURL(/\/trading/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Trading desk");
+    await expect(page.getByText("No AI key needed.")).toBeVisible();
+    await expect(page.getByText(/^Market (open|closed)$/)).toBeVisible(); // from the built-in NYSE calendar: no network, no model
+
+    // Sizing refuses until the user has set their own numbers.
+    await page.getByRole("tab", { name: "Plan a trade" }).click();
+    await expect(page.getByRole("button", { name: "Size it" })).toBeDisabled();
+
+    await page.getByRole("tab", { name: "My rules" }).click();
+    await page.getByLabel("Budget ($)").fill("5000");
+    await page.getByLabel("Most you accept to lose on one trade ($)").fill("50");
+    await page.getByRole("button", { name: "Save my rules" }).click();
+    await expect(page.getByText("Ready to size trades and check risk.")).toBeVisible();
+
+    // A real run through Next.js, the API, Redis and the sandboxed script. Without a saved plan it says what to do first.
+    await page.getByRole("tab", { name: "Plan a trade" }).click();
+    await page.getByRole("button", { name: "Size it" }).click();
+    await expect(page.getByRole("region", { name: "4. How many shares: output" })).toContainText("no plan", { timeout: 30_000 });
+    await expect(page.getByRole("region", { name: "4. How many shares: output" })).toContainText("trader_exit_plan");
+
+    // The result is still there after a reload.
+    await page.reload();
+    await page.getByRole("tab", { name: "Plan a trade" }).click();
+    await expect(page.getByRole("region", { name: "4. How many shares: output" })).toContainText("no plan");
+  });
+
   test("command palette navigates @mobile", async ({ page }) => {
     await login(page);
     await page.getByRole("button", { name: /Ask LEXA or search/ }).click();

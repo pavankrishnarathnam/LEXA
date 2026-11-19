@@ -10,7 +10,7 @@ const password = "e2e-password-123";
 
 const PAGES = [
   "/", "/assistant", "/tasks", "/tasks?tab=approvals", "/agents", "/agents/new", "/agents/career", "/career",
-  "/communication", "/research", "/developer", "/finance", "/automations", "/memory", "/integrations",
+  "/communication", "/research", "/developer", "/finance", "/trading", "/automations", "/memory", "/integrations",
   "/settings", "/settings?tab=usage", "/settings?tab=security", "/settings?tab=voice", "/settings?tab=preferences",
 ];
 
