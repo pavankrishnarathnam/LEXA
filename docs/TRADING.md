@@ -1,8 +1,13 @@
 # Trading with LEXA (US stocks, analysis only)
 
-The **Trader agent** helps you look for, plan and check day trades in **US stocks**. It scans charts, reads news,
-earnings and congress filings, times an entry, sets the stop and target *before* you get in, replays the plan
-10,000 times against the stock's own history, sizes it to **your** limits and checks it against **your** rules.
+LEXA can look for, plan and check day trades in **US stocks**. It scans charts, reads news, earnings and congress
+filings, times an entry, sets the stop and target *before* you get in, replays the plan 10,000 times against the
+stock's own history, sizes it to **your** limits and checks it against **your** rules. There are two ways in:
+
+- **The Trading desk** (sidebar, *Trading*): buttons and forms. **It needs no AI key.** Nothing on that page calls an AI
+  model, so it costs nothing and works with no OpenAI credits.
+- **The Trader agent** (ask in the Assistant, in plain words or by voice): the same tools, driven by an AI model, so it
+  needs a working AI key.
 
 **LEXA never places an order.** There is no broker connection, no order tool and no broker script in the code. You
 make every trade yourself, at your own broker. This is education and analysis, not financial advice, and most people
@@ -18,7 +23,25 @@ who day trade lose money; a scan, a setup or a simulation does not change that.
 
 ## Using it
 
-Ask LEXA in plain words; the planner hands trading requests to the Trader agent.
+### The Trading desk (no AI key needed)
+
+Open **Trading** in the sidebar. It has four tabs, each analysis a form with a button:
+
+| Tab | What is there |
+|---|---|
+| Find setups | Scan for setups (daily closes or opening-range breakouts; a list of tickers is fast, an empty list scans the whole US market in minutes) · Quotes |
+| Research | News and SEC filings · Earnings check · Congress trades |
+| Plan a trade | Six steps in order: has it triggered, stop and target, replay the odds, how many shares, check against my rules, alerts |
+| My rules | Your limits and your SEC contact |
+
+Results are plain text you can copy, with links only to Yahoo Finance, SEC and House Clerk pages. A long scan runs in
+the background: you can leave the page, the last result of each analysis is still there when you come back (for 24
+hours), and **Stop** ends one that is running. The market state at the top works from the built-in NYSE calendar, so
+it needs no network.
+
+### Asking the Trader agent
+
+Ask LEXA in plain words; the planner hands trading requests to the Trader agent (this needs an AI key).
 
 - *"Is the market open?"* · *"Scan TSLA, NVDA and AMD for opening-range breakouts"* · *"Scan the whole market for
   oversold stocks"* (takes several minutes)
@@ -29,10 +52,11 @@ Ask LEXA in plain words; the planner hands trading requests to the Trader agent.
 ### Your rules
 
 The budget and the most you accept to lose on one trade are **your** decisions, so sizing and the risk check refuse
-until you have set them; there is no silent default. Tell LEXA, for example, *"My budget is $5,000 and I can lose $50
-on one trade"*. The Trader agent calls `trader_set_rules`, which always waits for your approval (and is refused in the
-Read & analyze permission mode). The same goes for changing a limit later, so a headline, a filing or a web page can
-never loosen one.
+until you have set them; there is no silent default. On the desk, fill them in under **My rules**: that saves
+directly, because you are the one acting (it is written to the audit log). If you ask the Trader agent instead, say for
+example *"My budget is $5,000 and I can lose $50 on one trade"*: it calls `trader_set_rules`, which always waits for
+your approval (and is refused in the Read & analyze permission mode). That is what stops a headline, a filing or a web
+page from ever loosening a limit.
 
 | Rule | Default if you do not set it |
 |---|---|
@@ -50,6 +74,9 @@ changeable through LEXA: paper mode on, no options, no margin, no short selling.
 see every value and whether you set it.
 
 ### Tools
+
+Each tool is one analysis on the desk and one tool for the agent; `trader_set_rules` is the only one the desk does not
+start (it has its own form).
 
 | Tool | Does |
 |---|---|
@@ -88,7 +115,7 @@ Nothing to install: the scripts are part of the image. Two optional settings (`.
 
 | Variable | What |
 |---|---|
-| `TRADER_SEC_USER_AGENT` | `"Your Name you@example.org"`. SEC EDGAR asks every client to identify itself. Set it to turn on SEC filings in `trader_news` and `trader_earnings`; without it those parts are skipped and say so. It is sent to sec.gov only. |
+| `TRADER_SEC_USER_AGENT` | `"Your Name you@example.org"`. SEC EDGAR asks every client to identify itself. Set it to turn on SEC filings in `trader_news` and `trader_earnings` for everyone on the server; without it those parts are skipped and say so. Each user can instead enter their own name and email under **My rules**, which takes precedence. It is sent to sec.gov only. |
 | `TRADER_DATA_DIR` | Where each user's workspace lives. Default `/data/trader` (a Docker volume in `docker-compose.yml`); `/home/vscode/lexa-data/trader` in a Codespace. |
 
 In a Codespace, add `TRADER_SEC_USER_AGENT` as a Codespaces secret next to `OPENAI_API_KEY` (or put the line in
@@ -112,6 +139,7 @@ contact identity above goes to sec.gov only).
 | Loosened limits | `trader_set_rules` is a `sensitive` tool: always an approval, never auto-approved by an autonomy rule, denied in Read & analyze mode. |
 | Untrusted text steering the agent | Output from news, filings, scans and congress data is wrapped as `<untrusted_content>`, like emails and web pages. |
 | A runaway scan | A per-tool time limit (up to 8 minutes for a market-wide scan), an output cap and at most four scripts at a time. |
+| The desk being used to do more than analyse | `POST /api/trading/jobs` starts only the twelve read-only analyses (never `trader_set_rules`), validates their arguments, keeps three running per user and stores results in Redis under the user's own id, so another user's job id is simply "not found". Rules and the SEC contact have their own validated, audited endpoints; every write needs the session's CSRF token. |
 
 ## Updating the vendored scripts
 

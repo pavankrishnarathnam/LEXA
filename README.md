@@ -53,7 +53,7 @@ is described under *Production* below.
 | Research | Research Analyst | Live web search (OpenAI) + page fetch (robots.txt respected), cited reports; facts vs estimates vs assumptions |
 | Developer | Software Engineer | GitHub repos, PR diffs/reviews, issues, CI status; branches/issues/PRs via approval; never deploys or deletes |
 | Finance | Finance Assistant | Ledger, budgets, subscriptions, bill reminders — **cannot** move money |
-| Trader | US Stock Market Analyst | Scans US stocks, news, earnings and congress filings, times entries, plans stops and targets, simulates the odds, sizes and risk-checks against *your* limits — **analysis only, never places an order**; US markets only ([`docs/TRADING.md`](docs/TRADING.md)) |
+| Trader | US Stock Market Analyst | Scans US stocks, news, earnings and congress filings, times entries, plans stops and targets, simulates the odds, sizes and risk-checks against *your* limits — **analysis only, never places an order**; US markets only. Also a **Trading desk** page that needs no AI key ([`docs/TRADING.md`](docs/TRADING.md)) |
 | Personal Secretary | Productivity Manager | Calendar, scheduling, meeting prep, reminders, daily plans, Drive |
 | Operations | Digital Operations | Recurring automations, n8n workflows, MCP tools, reports |
 | Security | Security Assistant | Activity review, API usage, verified backup status, credential scanning |
