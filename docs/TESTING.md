@@ -30,13 +30,16 @@ Re-run after adding the Trader agent (analysis-only US stock tools; see [`TRADIN
 
 | Check | Result |
 |---|---|
-| Backend tests (`pytest`, real Postgres + Redis) | ✅ **183 passed** (61 before + 122 in `test_trading.py`) |
+| Backend tests (`pytest`, real Postgres + Redis) | ✅ **198 passed** (61 before + 122 in `test_trading.py` + 15 in `test_trading_desk.py`) |
 | `ruff check .` / `mypy` as CI runs it (85 files, now including `trading`) | ✅ 0 issues / ✅ 0 issues |
 | `mypy .` | the same 4 older errors in test files, none new |
-| Frontend `vitest` / `tsc --noEmit` (one icon added) | ✅ 188 passed / ✅ |
+| Frontend `vitest` / `tsc --noEmit` / `eslint` on the new files | ✅ **201 passed** (188 before + 13 in `trading.test.tsx`) / ✅ / ✅ |
+| Frontend production build (`next build`) | ✅ 21 routes, `/trading` included |
+| Playwright desktop project (10 tests, one new: the trading desk from the sidebar to a real run, with no AI model) | ✅ 10 passed |
+| Accessibility audit (axe, WCAG 2.1 A/AA) of every screen, now including `/trading`, dark and light | ✅ 0 violations (after the fix below) |
 | Backend image build, then the runner started inside it as the non-root `lexa` user on a fresh named volume | ✅ workspace mode 0700, rules persisted across two containers, an offline run failed cleanly |
 
-Not re-run for this change: Playwright end-to-end and axe suites, the full compose stack, `deploy.sh`/`backup.sh`.
+Not re-run for this change: the voice end-to-end project, the mobile project, the full compose stack, `deploy.sh`/`backup.sh`.
 Not verified: live calls to Yahoo Finance, SEC EDGAR, Nasdaq Trader and the House Clerk (this environment's network
 is restricted; the tests run the scripts on saved real responses), and reading a congress filing's PDF rows
 (`pdftotext` is not in the image).
@@ -144,6 +147,11 @@ The scripted provider is not included in production images (`tests/` is excluded
     with `aria-label` but no role.
   - The e2e harness exceeded the per-user rate limit (300 requests/min) with its own polling and was logged out: the
     harness now raises the limit (production defaults are unchanged).
+- **Found while adding the Trader agent:** the per-user workspace folder `trader/` was created with default permissions
+  instead of 0700 (only the innermost folder was private) → each level is created private; a test pins it.
+- **Found by the accessibility audit on the new Trading page:** the default button style is white on `#7c5cff` in the dark
+  theme, 4.34:1 against the required 4.5:1 (no other page shows that style where the audit can see it) → the trading
+  run buttons use the secondary style, like the rest of the app.
 - **Found from a real screenshot (the user's Codespace):** OpenAI answered HTTP 429 *"You have no credits remaining"* and LEXA
   (a) treated it as a momentary rate limit, so tasks were retried with backoff and the SDK retried too, (b) tried the
   fallback model of the same empty account, (c) showed the raw error text (with a truncated link) in the voice bar, and
