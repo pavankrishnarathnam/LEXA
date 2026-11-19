@@ -26,6 +26,7 @@ from api.routes import (
     records,
     system,
     tasks,
+    trading,
     voice,
 )
 from core.config import settings
@@ -101,5 +102,6 @@ async def coded_http_handler(_: Request, exc: CodedHTTPException) -> JSONRespons
     return JSONResponse({"detail": exc.detail, "code": exc.code}, status_code=exc.status_code, headers=exc.headers)
 
 
-for r in (auth, chat, documents, agents_routes, tasks, memory, integrations, automations, career, records, system, voice):
+for r in (auth, chat, documents, agents_routes, tasks, memory, integrations, automations, career, records, system, voice,
+          trading):
     app.include_router(r.router)

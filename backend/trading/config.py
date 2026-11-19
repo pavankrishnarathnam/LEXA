@@ -3,7 +3,8 @@
 Only values the user gave are stored. The scripts apply their own documented defaults to everything else
 (:func:`upstream_defaults` reads them from the vendored code, so they cannot drift). Four safety flags are fixed
 and cannot be changed through LEXA: paper mode on, and no options, margin or short selling. ``sec_user_agent`` is
-never written here; it comes from the ``TRADER_SEC_USER_AGENT`` setting.
+never written to that file: the SEC contact is kept apart (:func:`save_sec_contact`) and handed to the scripts
+only through their environment, from the user's own contact or else the ``TRADER_SEC_USER_AGENT`` setting.
 """
 from __future__ import annotations
 
@@ -222,3 +223,50 @@ def describe(rules: Mapping[str, Any] | None) -> list[dict[str, Any]]:
 
 def missing_for_sizing(rules: Mapping[str, Any] | None) -> list[str]:
     return [r for r in REQUIRED_FOR_SIZING if r not in (rules or {})]
+
+
+# ---------------------------------------------------------------- the user's SEC contact
+
+# SEC EDGAR asks every client to identify itself ("Name email"). The user can give their own, which is sent to
+# sec.gov only, instead of relying on one set for the whole server.
+_CONTACT = re.compile(r"[A-Za-z][A-Za-z0-9 .,'\-]{0,60}[A-Za-z0-9.] [A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9\-]+(\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}")
+
+
+def validate_sec_contact(value: Any) -> str:
+    if not isinstance(value, str):
+        raise RuleError("SEC contact: give your name and email, e.g. Jane Doe jane@example.org")
+    s = " ".join(value.split())
+    if not _CONTACT.fullmatch(s) or "you@example.com" in s or len(s) > 150:
+        raise RuleError("SEC contact: give your real name and email, e.g. Jane Doe jane@example.org")
+    return s
+
+
+def _contact_path(workdir: Path) -> Path:
+    return workdir / "trader" / "sec_contact.txt"
+
+
+def load_sec_contact(workdir: Path) -> str | None:
+    try:
+        return validate_sec_contact(_contact_path(workdir).read_text(encoding="utf-8"))
+    except (OSError, RuleError):
+        return None
+
+
+def save_sec_contact(workdir: Path, value: Any) -> str | None:
+    """Store the user's SEC contact (private file), or remove it when ``value`` is empty. Returns what is stored."""
+    path = _contact_path(workdir)
+    if value is None or (isinstance(value, str) and not value.strip()):
+        with contextlib.suppress(FileNotFoundError):
+            path.unlink()
+        return None
+    contact = validate_sec_contact(value)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".contact-", suffix=".tmp")  # created 0600
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(contact + "\n")
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
+    return contact

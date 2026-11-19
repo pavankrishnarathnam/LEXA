@@ -44,12 +44,23 @@ def _present(res: ScriptResult, limit: float, untrusted: str | None = None) -> T
 
 
 async def _exec(ctx: ToolContext, script: str, cmd: str | None = None, positionals: tuple[Any, ...] | list[Any] = (),
-                flags: dict[str, Any] | None = None, *, limit: float = 90, untrusted: str | None = None) -> ToolResult:
+                flags: dict[str, Any] | None = None, *, limit: float = 90, untrusted: str | None = None,
+                sec_user_agent: str | None = None) -> ToolResult:
     try:
-        res = await run_script(ctx.user_id, script, cmd, positionals, flags, time_limit=limit)
+        res = await run_script(ctx.user_id, script, cmd, positionals, flags, time_limit=limit,
+                               sec_user_agent=sec_user_agent)
     except TraderError as exc:
         return ToolResult(str(exc), is_error=True)
     return _present(res, limit, untrusted)
+
+
+def sec_identity(ctx: ToolContext) -> str:
+    """The SEC contact to use for this user: their own if they gave one, else the server's (may be empty)."""
+    try:
+        own = rules.load_sec_contact(workspace(ctx.user_id))
+    except TraderError:
+        own = None
+    return own or settings.trader_sec_user_agent
 
 
 def _rules_missing(ctx: ToolContext) -> ToolResult | None:
@@ -135,16 +146,16 @@ async def trader_scan(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
       risk=Risk.INTERNAL, category=CATEGORY, timeout=180)
 async def trader_news(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
     want_sec = a.get("include_sec_filings", True) is not False
-    sec_ok = sec_identity_ok(settings.trader_sec_user_agent)
+    identity = sec_identity(ctx)
+    sec_ok = sec_identity_ok(identity)
     only_new = bool(a.get("only_new"))
     flags = _clean({"--tickers": list(a.get("tickers") or []) or None, "--hours": a.get("hours"),
                     "--no-sec": True if not (want_sec and sec_ok) else None,
                     "--all": None if only_new else True, "--dry-run": None if only_new else True})
-    result = await _exec(ctx, "news.py", None, flags=flags, limit=150, untrusted=MARKET_DATA)
+    result = await _exec(ctx, "news.py", None, flags=flags, limit=150, untrusted=MARKET_DATA, sec_user_agent=identity)
     if want_sec and not sec_ok and not result.is_error:
-        result.content = ("(SEC filings were skipped: the server has no SEC contact identity. Set "
-                          "TRADER_SEC_USER_AGENT to \"Your Name you@example.org\" to include them.)\n"
-                          + result.content)
+        result.content = ("(SEC filings were skipped: no SEC contact is set. The user can add their name and email "
+                          "under My rules, or the server owner can set TRADER_SEC_USER_AGENT.)\n" + result.content)
     return result
 
 
@@ -155,10 +166,13 @@ async def trader_news(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
       S(tickers=array("1 to 3 US tickers")) | {"required": ["tickers"]}, risk=Risk.READ, category=CATEGORY,
       timeout=150)
 async def trader_earnings(ctx: ToolContext, a: dict[str, Any]) -> ToolResult:
-    if not sec_identity_ok(settings.trader_sec_user_agent):
-        return ToolResult("SEC EDGAR asks every client to identify itself and this server has no identity set. "
-                          "The owner must set TRADER_SEC_USER_AGENT to \"Your Name you@example.org\".", is_error=True)
-    return await _exec(ctx, "facts.py", None, list(a["tickers"])[:3], limit=120, untrusted=MARKET_DATA)
+    identity = sec_identity(ctx)
+    if not sec_identity_ok(identity):
+        return ToolResult("SEC EDGAR asks every client to identify itself and no SEC contact is set. The user can add "
+                          "their name and email under My rules, or the server owner can set TRADER_SEC_USER_AGENT.",
+                          is_error=True)
+    return await _exec(ctx, "facts.py", None, list(a["tickers"])[:3], limit=120, untrusted=MARKET_DATA,
+                       sec_user_agent=identity)
 
 
 @tool("trader_congress_trades",
