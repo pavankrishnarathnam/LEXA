@@ -9,6 +9,7 @@ from agents.tools import (  # noqa: F401
     research,
     secretary,
     security,
+    trader,
 )
 from agents.tools.base import TOOLS, ToolContext, ToolDef, ToolResult, get_tool
 

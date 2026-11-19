@@ -10,7 +10,7 @@ os.environ.update({
     "ENVIRONMENT": "test", "ANTHROPIC_API_KEY": "", "OPENAI_API_KEY": "",
     "DEFAULT_MODEL": "test-model", "FAST_MODEL": "test-fast", "FALLBACK_MODEL": "test-fallback",
     "JWT_SECRET": "test-secret-0123456789-0123456789-0123456789", "RATE_LIMIT_PER_MINUTE": "10000", "AUTH_RATE_LIMIT": "10000",
-    "UPLOAD_DIR": os.path.join(_TMP, "uploads"),
+    "UPLOAD_DIR": os.path.join(_TMP, "uploads"), "TRADER_DATA_DIR": os.path.join(_TMP, "trader"),
     "MODEL_PRICING_JSON": '{"test-model": [1.0, 5.0], "test-fallback": [1.0, 5.0], "test-fast": [0.1, 0.5]}', "BACKUP_STATUS_FILE": os.path.join(_TMP, "backup.json"),
 })
 

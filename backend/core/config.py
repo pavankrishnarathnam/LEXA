@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     github_client_id: str = ""
     github_client_secret: str = ""
 
+    # Trader agent (analysis only; LEXA never places orders). The vendored Day Trader scripts keep one private
+    # workspace per user under this folder, so put it on a volume.
+    trader_data_dir: str = "/data/trader"
+    # Contact identity that SEC EDGAR asks every client to send, e.g. "Jane Doe jane@example.org". It is used
+    # only for SEC requests (company filings) and only if set; without it those lookups are skipped.
+    trader_sec_user_agent: str = ""
+
     # Worker
     worker_poll_interval: float = 1.0
     worker_concurrency: int = 4
