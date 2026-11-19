@@ -22,6 +22,9 @@ set -a
 . "$STATE/secrets.env"
 set +a
 export ENVIRONMENT=development ALLOW_REGISTRATION="${ALLOW_REGISTRATION:-true}"
+# The Trader agent keeps one private folder per user here. The dev container sets it too; this default covers a
+# container created before the setting existed, so restarting LEXA is enough.
+export TRADER_DATA_DIR="${TRADER_DATA_DIR:-$STATE/trader}"
 
 # ------------------------------------------------------------------ public address helpers
 in_codespace() { [ -n "${CODESPACE_NAME:-}" ] || [ -n "${LEXA_PUBLIC_URL_TEMPLATE:-}" ]; }

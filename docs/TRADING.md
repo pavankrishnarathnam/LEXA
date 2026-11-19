@@ -91,6 +91,10 @@ Nothing to install: the scripts are part of the image. Two optional settings (`.
 | `TRADER_SEC_USER_AGENT` | `"Your Name you@example.org"`. SEC EDGAR asks every client to identify itself. Set it to turn on SEC filings in `trader_news` and `trader_earnings`; without it those parts are skipped and say so. It is sent to sec.gov only. |
 | `TRADER_DATA_DIR` | Where each user's workspace lives. Default `/data/trader` (a Docker volume in `docker-compose.yml`); `/home/vscode/lexa-data/trader` in a Codespace. |
 
+In a Codespace, add `TRADER_SEC_USER_AGENT` as a Codespaces secret next to `OPENAI_API_KEY` (or put the line in
+`~/lexa-data/secrets.env`) and restart LEXA with `bash .devcontainer/start.sh`; the workspace folder is
+`~/lexa-data/trader` and survives a stopped codespace.
+
 Each user's rules, plans, watchlist and alerts are small JSON files in `TRADER_DATA_DIR/<user-id>/trader/`. Deleting
 that folder resets the user's trading state. Nothing else about you is sent anywhere: the requests go to Yahoo Finance,
 Nasdaq Trader, SEC EDGAR and the House Clerk and carry tickers and dates, never your budget, rules or name (the SEC
