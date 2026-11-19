@@ -37,7 +37,7 @@ dev = ["pytest>=8.4", "pytest-asyncio>=1.5", "ruff>=0.17", "mypy>=2.4", "pip-aud
 [tool.ruff]
 line-length = 110
 target-version = "py312"
-extend-exclude = ["database/migrations/versions"]
+extend-exclude = ["database/migrations/versions", "trading/vendor"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
@@ -56,3 +56,4 @@ testpaths = ["tests"]
 python_version = "3.12"
 ignore_missing_imports = true
 check_untyped_defs = false
+exclude = ["trading/vendor/"]
