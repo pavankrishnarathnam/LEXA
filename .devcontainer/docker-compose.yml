@@ -9,6 +9,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://lexa:lexa@db:5432/lexa
       REDIS_URL: redis://redis:6379/0
       UPLOAD_DIR: /home/vscode/lexa-data/uploads
+      TRADER_DATA_DIR: /home/vscode/lexa-data/trader
       BACKUP_STATUS_FILE: /home/vscode/lexa-data/last_backup.json
     depends_on: [db, redis]
 

@@ -37,7 +37,7 @@ jobs:
       - name: Ruff (lint + security rules)
         run: ruff check .
       - name: Mypy
-        run: mypy api core agents orchestration memory integrations database workers main.py
+        run: mypy api core agents orchestration memory integrations database workers trading main.py
       - name: Migrations apply and roll back cleanly
         env: { DATABASE_URL: "postgresql+asyncpg://lexa:lexa@localhost:5432/lexa" }
         run: |
@@ -83,6 +83,7 @@ jobs:
       DATABASE_URL: "postgresql+asyncpg://lexa:lexa@localhost:5432/lexa"
       REDIS_URL: "redis://localhost:6379/2"
       UPLOAD_DIR: "/tmp/lexa-e2e-uploads"
+      TRADER_DATA_DIR: "/tmp/lexa-e2e-trader"
       BACKEND_URL: "http://127.0.0.1:8000"
       NEXT_TELEMETRY_DISABLED: "1"
     steps:

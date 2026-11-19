@@ -20,6 +20,7 @@ x-backend: &backend
     BACKUP_STATUS_FILE: /backups/last_backup.json
   volumes:
     - uploads:/data/uploads
+    - trader:/data/trader
     - ./backups:/backups:ro
   networks: [internal]
   restart: unless-stopped
@@ -147,5 +148,6 @@ volumes:
   pgdata: {}
   redisdata: {}
   uploads: {}
+  trader: {}
   certs: {}
   acme: {}
