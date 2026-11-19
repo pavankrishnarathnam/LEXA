@@ -24,6 +24,23 @@ pgvector 0.8, Redis 7). Results below are from actual runs on the final commit.
 | `pip-audit` (pinned lock) / `npm audit --omit=dev` | ✅ 0 known vulnerabilities |
 | `shellcheck` on all scripts / `check_env.py` | ✅ |
 
+## Update 2026-11-19: Trader agent
+
+Re-run after adding the Trader agent (analysis-only US stock tools; see [`TRADING.md`](TRADING.md)):
+
+| Check | Result |
+|---|---|
+| Backend tests (`pytest`, real Postgres + Redis) | ✅ **183 passed** (61 before + 122 in `test_trading.py`) |
+| `ruff check .` / `mypy` as CI runs it (85 files, now including `trading`) | ✅ 0 issues / ✅ 0 issues |
+| `mypy .` | the same 4 older errors in test files, none new |
+| Frontend `vitest` / `tsc --noEmit` (one icon added) | ✅ 188 passed / ✅ |
+| Backend image build, then the runner started inside it as the non-root `lexa` user on a fresh named volume | ✅ workspace mode 0700, rules persisted across two containers, an offline run failed cleanly |
+
+Not re-run for this change: Playwright end-to-end and axe suites, the full compose stack, `deploy.sh`/`backup.sh`.
+Not verified: live calls to Yahoo Finance, SEC EDGAR, Nasdaq Trader and the House Clerk (this environment's network
+is restricted; the tests run the scripts on saved real responses), and reading a congress filing's PDF rows
+(`pdftotext` is not in the image).
+
 ## What the backend tests cover (`backend/tests`)
 - **Auth**: register/login/profile, CSRF enforcement on cookie writes, unauthenticated rejection, lockout after
   5 failures, logout revokes refresh tokens, duplicate registration.
@@ -45,6 +62,17 @@ pgvector 0.8, Redis 7). Results below are from actual runs on the final commit.
   scheduled run, webhook auth/conditions, pause), career dedupe + explainable scoring + analytics, document
   upload/dedupe/type rejection/indexing/deletion, usage/audit/export/finance, budget enforcement, secret scanner,
   untrusted-content wrapping.
+- **Trader agent** (`test_trading.py`, 122 tests, offline on saved real market data in `tests/fixtures/trader`): the
+  vendored scripts match their hash manifest and pass a static audit (standard library only, GET-only, known hosts, no
+  broker script); the argument allow-list accepts the documented forms and refuses ~40 hostile ones (paths, shell
+  syntax, flags that are not offered, NaN, oversized lists), and every allow-listed flag is checked against the
+  script's real `--help`; the runner gives the child a minimal environment (no secrets), its own folder and resource
+  limits, kills a hung script *with its own child process*, cuts off runaway output, and stops a script when its call
+  is cancelled; rules are validated (including the fixed paper/no-options/no-margin/no-shorting flags); every tool
+  runs end to end from scan to alerts; two users never share state; no trader tool is `external`; changing a limit
+  is always approved (denied in read-only mode, even with an autonomy rule), then applied exactly once; the agent is
+  offered nothing that can send or post. Mutation checks (inheriting the whole environment, a no-op kill, an
+  allow-listed path flag, an extra script, an edited script) each make a test fail.
 
 ## Voice and accessibility suites
 See [`VOICE.md`](VOICE.md) for the full list. In brief:

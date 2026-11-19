@@ -74,6 +74,16 @@ decisions are rejected), records the result, notifies the user and finalizes the
 `<untrusted_content>` with an instruction not to follow embedded instructions; the global policy in every system
 prompt repeats this.
 
+## Trading (`trading/`, `agents/tools/trader.py`)
+
+The Trader agent's tools wrap ten third-party analysis scripts (`trading/vendor/`, unmodified, hash-pinned) that
+read free public market data and keep their state in plain JSON files. LEXA never imports them: `trading/runner.py`
+runs one script per call in a child process (`python -I`, stripped environment, per-user workspace under
+`TRADER_DATA_DIR`, arguments built only from an allow-list, resource/time/output limits), `trading/config.py`
+validates the user's rules into that workspace, and `trading/output.py` rewrites the scripts' console hints for LEXA.
+A tool may set its own time limit (`ToolDef.timeout`, used by the market-wide scan). There is no order path:
+see [`TRADING.md`](TRADING.md).
+
 ## AI provider layer (`core/llm`)
 
 - `RoutedSession` keeps a provider-native transcript (so Claude's thinking/tool blocks are replayed unchanged)

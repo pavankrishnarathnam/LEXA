@@ -4,6 +4,9 @@
 The PostgreSQL database (all application data, memories with embeddings, tasks, audit logs, LangGraph
 checkpoints). Uploaded files live in the `uploads` Docker volume — back it up with your VPS snapshot feature or
 `docker run --rm -v lexa_uploads:/d -v $PWD/backups:/b alpine tar czf /b/uploads-$(date +%F).tgz -C /d .`
+The Trader agent's per-user workspaces (trading rules, plans, alerts; a few small JSON files each) live in the
+`trader` volume and are not in the database backup. They are quick to recreate; to keep them, archive the volume the
+same way (`-v lexa_trader:/d`).
 
 ## Automatic backups
 `install-vps.sh` installs `/etc/cron.d/lexa`, running `infrastructure/scripts/backup.sh` nightly at 03:15 and

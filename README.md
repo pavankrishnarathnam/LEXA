@@ -7,7 +7,7 @@ honestly what was done, what is pending and what failed.
 
 - **Runs on OpenAI**: `gpt-5.1` for planning and agents, `gpt-5-mini` for fast tasks and live web search,
   OpenAI embeddings for memory and OpenAI voice. Claude models can optionally be added per agent.
-- **9 built-in specialist agents** + custom agents you define in the dashboard (no code changes).
+- **10 built-in specialist agents** + custom agents you define in the dashboard (no code changes).
 - **Durable execution**: tasks run in a background worker from a Postgres job queue; the LangGraph state is
   checkpointed in Postgres, so a crashed run resumes where it stopped.
 - **Human-in-the-loop**: three permission modes; sensitive actions always need approval; approved actions run
@@ -41,7 +41,7 @@ is described under *Production* below.
 | `infrastructure/` | Nginx (HTTPS) config, VPS install / TLS / deploy / backup / restore scripts |
 | `automation/` | n8n integration notes and example workflow |
 | `.github/workflows/` | `ci.yml`, `deploy.yml`, `security.yml` |
-| `docs/` | Architecture, security, deployment, backup, testing and deployment reports |
+| `docs/` | Architecture, security, trading, deployment, backup, testing and deployment reports |
 
 ## Agents
 
@@ -53,6 +53,7 @@ is described under *Production* below.
 | Research | Research Analyst | Live web search (OpenAI) + page fetch (robots.txt respected), cited reports; facts vs estimates vs assumptions |
 | Developer | Software Engineer | GitHub repos, PR diffs/reviews, issues, CI status; branches/issues/PRs via approval; never deploys or deletes |
 | Finance | Finance Assistant | Ledger, budgets, subscriptions, bill reminders — **cannot** move money |
+| Trader | US Stock Market Analyst | Scans US stocks, news, earnings and congress filings, times entries, plans stops and targets, simulates the odds, sizes and risk-checks against *your* limits — **analysis only, never places an order**; US markets only ([`docs/TRADING.md`](docs/TRADING.md)) |
 | Personal Secretary | Productivity Manager | Calendar, scheduling, meeting prep, reminders, daily plans, Drive |
 | Operations | Digital Operations | Recurring automations, n8n workflows, MCP tools, reports |
 | Security | Security Assistant | Activity review, API usage, verified backup status, credential scanning |
@@ -121,7 +122,7 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the latest results and what is (and
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md) · [Security](docs/SECURITY.md) · [Deployment](docs/DEPLOYMENT.md) ·
+- [Architecture](docs/ARCHITECTURE.md) · [Security](docs/SECURITY.md) · [Trading](docs/TRADING.md) · [Deployment](docs/DEPLOYMENT.md) ·
   [Backup & restore](docs/BACKUP.md) · [Voice](docs/VOICE.md) · [Testing report](docs/TESTING.md) ·
   [Deployment report](docs/DEPLOYMENT_REPORT.md)
 

@@ -28,6 +28,11 @@
 - Web access respects robots.txt and never bypasses CAPTCHAs; SSRF guard blocks private addresses in production
   for web fetch, n8n and MCP URLs.
 - Per-agent cost and iteration limits; per-user monthly budget; per-task timeouts.
+- **Trader agent**: analysis only, with no broker code and no order tool; vendored third-party scripts run in a
+  sandboxed child process (allow-listed arguments, stripped environment without any LEXA secret, per-user private
+  folder, CPU/memory/file/time/output limits, killed with their whole process group) and are pinned by hash;
+  changing the user's trading limits is a `sensitive` tool that always needs approval. See
+  [`TRADING.md`](TRADING.md#how-it-stays-safe).
 
 ## Voice
 - The microphone is opened only while voice mode is on, only in a signed-in session, and only finished sentences are
