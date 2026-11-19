@@ -24,6 +24,7 @@ export const PAGES: PageDef[] = [
   { label: "Research", path: "/research", aliases: ["research", "research center", "research centre", "reports", "research reports"] },
   { label: "Developer", path: "/developer", aliases: ["developer", "developer center", "developer centre", "dev", "github", "code", "repositories", "repos"] },
   { label: "Finance", path: "/finance", aliases: ["finance", "finances", "budget", "expenses", "money", "spending"] },
+  { label: "Trading", path: "/trading", aliases: ["trading", "trading desk", "trader", "stocks", "stock market", "day trading"] },
   { label: "Automations", path: "/automations", aliases: ["automations", "automation", "workflows", "workflow", "schedules"] },
   { label: "Memory", path: "/memory", aliases: ["memory", "memories", "profile", "knowledge"] },
   { label: "Integrations", path: "/integrations", aliases: ["integrations", "integration", "connections", "connected apps", "apps"] },

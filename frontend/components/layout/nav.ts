@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Activity, Bot, Brain, Briefcase, Code2, Home, Mail, MessageSquareText, Plug, Search, Settings, Wallet, Workflow } from "lucide-react";
+import { Activity, Bot, Brain, Briefcase, Code2, Home, Mail, MessageSquareText, Plug, Search, Settings, TrendingUp, Wallet, Workflow } from "lucide-react";
 
 export interface NavItem { href: string; label: string; icon: LucideIcon }
 
@@ -16,6 +16,7 @@ export const NAV: { group: string; items: NavItem[] }[] = [
     { href: "/research", label: "Research", icon: Search },
     { href: "/developer", label: "Developer", icon: Code2 },
     { href: "/finance", label: "Finance", icon: Wallet },
+    { href: "/trading", label: "Trading", icon: TrendingUp },
   ] },
   { group: "System", items: [
     { href: "/automations", label: "Automations", icon: Workflow },
