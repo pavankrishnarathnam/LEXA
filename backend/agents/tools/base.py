@@ -59,6 +59,8 @@ class ToolDef:
     summarize: Callable[[dict[str, Any]], str] | None = None
     # Returns a reason string if a specific call should be escalated to SENSITIVE.
     sensitivity: Callable[[dict[str, Any]], str | None] | None = None
+    # Seconds the call may run; None uses the runner's default (TOOL_TIMEOUT). For legitimately slow tools only.
+    timeout: int | None = None
 
     def spec(self) -> ToolSpec:
         return ToolSpec(self.name, self.description, self.input_schema)
@@ -77,13 +79,15 @@ TOOLS: dict[str, ToolDef] = {}
 
 def tool(name: str, description: str, schema: dict[str, Any], *, risk: Risk, category: str,
          integration: str | None = None, summarize: Callable[[dict[str, Any]], str] | None = None,
-         sensitivity: Callable[[dict[str, Any]], str | None] | None = None) -> Callable[[Handler], Handler]:
+         sensitivity: Callable[[dict[str, Any]], str | None] | None = None,
+         timeout: int | None = None) -> Callable[[Handler], Handler]:
     full_schema = {"type": "object", "additionalProperties": False, **schema}
     full_schema.setdefault("properties", {})
     full_schema.setdefault("required", [])
 
     def deco(fn: Handler) -> Handler:
-        TOOLS[name] = ToolDef(name, description, full_schema, risk, category, fn, integration, summarize, sensitivity)
+        TOOLS[name] = ToolDef(name, description, full_schema, risk, category, fn, integration, summarize, sensitivity,
+                              timeout)
         return fn
 
     return deco

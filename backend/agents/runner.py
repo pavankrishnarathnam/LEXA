@@ -217,15 +217,16 @@ async def _execute_call(cfg: AgentConfig, user: User, name: str, args: dict[str,
                                data={"approval_id": str(appr.id)})
             return ToolResult(f"QUEUED FOR APPROVAL (approval id {appr.id}). This action has NOT been executed; it "
                               "will run only if the user approves it. Report it as pending.")
+        limit = t.timeout or TOOL_TIMEOUT
         try:
-            out = await asyncio.wait_for(t.handler(ctx, args), timeout=TOOL_TIMEOUT)
+            out = await asyncio.wait_for(t.handler(ctx, args), timeout=limit)
             await db.commit()
         except (IntegrationNotConnected, IntegrationError) as exc:
             await db.rollback()
             out = ToolResult(str(exc), is_error=True)
         except TimeoutError:
             await db.rollback()
-            out = ToolResult(f"Tool timed out after {TOOL_TIMEOUT}s", is_error=True)
+            out = ToolResult(f"Tool timed out after {limit}s", is_error=True)
         except Exception as exc:  # noqa: BLE001 - tool failures are reported back to the model
             await db.rollback()
             log.exception("tool %s failed", name)
