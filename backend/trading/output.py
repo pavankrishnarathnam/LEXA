@@ -29,6 +29,18 @@ _ALERT_LOOP = re.compile(r"Run alerts\.py check every few minutes while the trad
 
 _NO_BROKER = "LEXA does not place or close trades: that is always your own decision, made at your broker."
 
+# "<script>.py: message" error lines, and the command-line hints inside some messages, point at things that do not
+# exist in LEXA. Each is rewritten to the matching tool or dropped.
+_PREFIX = re.compile(r"^(?:scan|news|facts|ptr|entry|exit|timemachine|size|check|alerts)\.py: ")
+_REWRITES: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r",? or use --weights for a split"), ""),
+    (re.compile(r"(?:trader-alerts: )?alerts\.py quote (\S+?) --write"), r"trader_quote for \1"),
+    (re.compile(r"(?:trader-alerts: )?alerts\.py add --from-plan"), "trader_alerts with from_plan"),
+    (re.compile(r"alerts\.py quote TSLA KO, or --holdings"), "give one or more tickers"),
+    (re.compile(r"exit\.py plan --write"), "trader_exit_plan"),
+    (re.compile(r"entry\.py check <TICKER> --write"), "trader_entry on that ticker"),
+]
+
 
 def clean_output(text: str) -> str:
     out: list[str] = []
@@ -49,6 +61,9 @@ def clean_output(text: str) -> str:
                             "(nothing has been placed; LEXA never places orders)")
         if "trader-broker" in line or "ticket.py" in line:
             continue
+        line = _PREFIX.sub("", line)
+        for pattern, replacement in _REWRITES:
+            line = pattern.sub(replacement, line)
         line = _SKILL.sub(lambda m: _TOOL_NAMES[m.group(1)], line)
         line = _SEC_ENV.sub("TRADER_SEC_USER_AGENT", line)
         if line.strip() or (out and out[-1].strip()):  # no runs of blank lines left behind by dropped hints

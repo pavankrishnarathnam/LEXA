@@ -489,6 +489,10 @@ def test_upstream_hints_are_rewritten_for_lexa_and_real_text_is_left_alone():
         Run alerts.py check every few minutes while the trade is open (a scheduled task or /loop).
         2026-10-19 09:41 ET  TSLA  Next: the Fed decides, and Tesla moves 3.31% (a headline)
         Entry 364.18, stop 358.32, target 375.90, risk 5.86 a share
+        size.py: no plan (run trader-exit first, or use --weights for a split) at trader/plan.json
+        No plan at trader/plan.json yet. Make one: exit.py plan --write
+        which tickers? alerts.py quote TSLA KO, or --holdings
+        (a fresh price may be needed: e.g. with trader-alerts: alerts.py quote TSLA --write)
     """)
     out = clean_output(raw)
     for gone in ("trader-broker", "ticket.py", "place_stock_order", "/trader-", "Nothing was placed.", "/loop"):
@@ -504,6 +508,9 @@ def test_upstream_hints_are_rewritten_for_lexa_and_real_text_is_left_alone():
     # Third-party text and numbers are never edited, even when they contain "Next:".
     assert "Next: the Fed decides, and Tesla moves 3.31% (a headline)" in out
     assert "Entry 364.18, stop 358.32, target 375.90, risk 5.86 a share" in out
+    assert "no plan (run trader_exit_plan first) at trader/plan.json" in out and "size.py:" not in out
+    assert "Make one: trader_exit_plan" in out and "give one or more tickers" in out
+    assert "e.g. with trader_quote for TSLA)" in out and ".py" not in out.replace("trader/", "")
 
 
 # ---------------------------------------------------------------- the tools, on saved market data
